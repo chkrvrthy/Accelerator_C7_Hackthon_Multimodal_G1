@@ -1,0 +1,6 @@
+# Person E — Market Research, Gradio UI, MCP server.
+-r base.txt
+gradio>=4.44.0
+tavily-python>=0.5.0
+duckduckgo-search>=6.3.0
+mcp>=1.0.0

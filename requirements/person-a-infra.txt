@@ -1,0 +1,7 @@
+# Person A — Infra & Orchestration
+# Owns: contracts, fakes, LLM gateway, cost cache, agents/base, agents/graph,
+# agents/synthesizer, evals, tracing, conftest.
+-r base.txt
+langgraph>=0.2.40
+langchain-core>=0.3.0
+langsmith>=0.1.140

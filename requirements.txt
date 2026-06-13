@@ -1,0 +1,3 @@
+# Top-level alias. Pulls every slice via requirements/all.txt.
+# Per-slice installs live under requirements/person-<x>-*.txt.
+-r requirements/all.txt

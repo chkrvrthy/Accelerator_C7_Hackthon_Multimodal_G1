@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multimodal AI Design Analysis Suite — Interactive Walkthrough</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+<style>
+:root {
+  --bg: #0b1020; --bg-soft: #131a2e; --bg-card: #1a2240;
+  --fg: #e5e7eb; --fg-muted: #9ca3af;
+  --accent: #38bdf8; --border: #2a3553; --code-bg: #0f1424;
+  --a: #14b8a6; --b: #8b5cf6; --c: #f59e0b; --d: #f43f5e; --e: #6366f1;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f8fb; --bg-soft: #ffffff; --bg-card: #ffffff;
+    --fg: #0f172a; --fg-muted: #475569;
+    --accent: #0284c7; --border: #e2e8f0; --code-bg: #1e1e2e;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px; line-height: 1.55; scroll-behavior: smooth; }
+a { color: var(--accent); }
+header.top { background: linear-gradient(180deg, var(--bg-soft) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; backdrop-filter: blur(8px); }
+header.top .head-inner { max-width: 1180px; margin: 0 auto; padding: 14px 24px 0; }
+header.top h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+header.top .sub { margin: 2px 0 10px; color: var(--fg-muted); font-size: 13px; }
+nav.tabnav { display: flex; gap: 4px; flex-wrap: wrap; padding-bottom: 8px; }
+nav.tabnav button { background: transparent; border: 1px solid transparent; color: var(--fg-muted);
+  padding: 8px 14px; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+nav.tabnav button:hover { color: var(--fg); background: var(--bg-card); }
+nav.tabnav button.active { color: var(--fg); background: var(--bg-card); border-color: var(--border); border-bottom-color: var(--bg-card); }
+main.container { max-width: 1180px; margin: 0 auto; padding: 28px 24px 120px; }
+section.tab { display: none; animation: fadeIn 0.25s ease-out; }
+section.tab.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+h3 { font-size: 17px; margin: 28px 0 10px; color: var(--fg); }
+p.lede { font-size: 17px; color: var(--fg-muted); max-width: 780px; margin: 0 0 24px; }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 12px 0 18px; }
+.hero { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-soft) 100%); border: 1px solid var(--border);
+  border-radius: 16px; padding: 40px 32px; margin-bottom: 20px; }
+.hero h2 { font-size: 32px; margin-bottom: 12px; }
+.hero .lede { font-size: 18px; margin-bottom: 24px; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn { background: var(--accent); color: #fff; border: none; padding: 12px 22px; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+.btn:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 18px 0; }
+.stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center; }
+.stat .n { display: block; font-size: 26px; font-weight: 700; color: var(--accent); }
+.stat .l { display: block; margin-top: 4px; font-size: 12px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; color: #fff; vertical-align: middle; }
+.badge-a { background: var(--a); }
+.badge-b { background: var(--b); }
+.badge-c { background: var(--c); }
+.badge-d { background: var(--d); }
+.badge-e { background: var(--e); }
+.badge-shared { background: linear-gradient(90deg, var(--a), var(--e)); }
+.subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.subtabs button { background: transparent; border: 1px solid var(--border); color: var(--fg-muted);
+  padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.subtabs button.active { background: var(--bg-card); color: var(--fg); border-color: var(--accent); }
+.person-pane { display: none; }
+.person-pane.active { display: block; }
+.person-pane .role { font-size: 22px; font-weight: 700; margin: 6px 0 4px; }
+.person-pane p.mission { color: var(--fg-muted); margin-bottom: 16px; }
+.magic { margin-top: 14px; padding: 12px 16px; background: var(--bg-card);
+  border-left: 3px solid var(--accent); border-radius: 4px; font-style: italic; color: var(--fg); }
+ol.steps { list-style: none; padding: 0; margin: 0; }
+li.step { margin: 10px 0; }
+li.step details { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; transition: border-color 0.15s; }
+li.step details[open] { border-color: var(--accent); }
+li.step summary { list-style: none; cursor: pointer; padding: 16px 20px;
+  display: flex; align-items: center; gap: 14px; user-select: none; }
+li.step summary::-webkit-details-marker { display: none; }
+li.step summary::marker { content: ""; }
+li.step summary .num { display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 8px; font-weight: 700; font-size: 13px; color: var(--fg-muted); flex-shrink: 0; }
+li.step details[open] summary .num { background: var(--accent); border-color: var(--accent); color: #fff; }
+li.step summary .title { flex: 1; font-weight: 600; font-size: 15px; }
+li.step summary .chev { color: var(--fg-muted); font-size: 13px; transition: transform 0.2s; }
+li.step details[open] summary .chev { transform: rotate(180deg); }
+.step-body { padding: 0 20px 20px 64px; color: var(--fg-muted); font-size: 14px;
+  border-top: 1px solid var(--border); margin-top: 4px; padding-top: 16px; }
+.step-body p { margin: 8px 0; color: var(--fg); }
+.filepath { display: inline-flex; align-items: center; gap: 8px; background: var(--code-bg);
+  padding: 6px 10px; border-radius: 6px; margin: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.filepath code { background: transparent; color: #e6e8ef; padding: 0; }
+.copy-btn { background: transparent; border: 1px solid #444; color: #cbd5e1;
+  padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.copy-btn:hover { background: #2a3553; }
+pre[class*="language-"] { border-radius: 8px; margin: 10px 0; font-size: 13px; border: 1px solid var(--border); }
+code:not([class*="language-"]) { background: var(--bg-soft); border: 1px solid var(--border);
+  padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+table.coverage { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+table.coverage th, table.coverage td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+table.coverage th { background: var(--bg-soft); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); }
+table.coverage tr:last-child td { border-bottom: none; }
+table.coverage tr:hover { background: var(--bg-soft); }
+table.coverage td code { font-size: 12px; }
+ul.scale-list { list-style: none; padding: 0; counter-reset: scale; }
+ul.scale-list li { counter-increment: scale; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 16px 12px 50px; position: relative; margin: 8px 0; }
+ul.scale-list li::before { content: counter(scale); position: absolute; left: 14px; top: 12px;
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; border-radius: 6px; font-weight: 700; font-size: 12px; }
+ul.simple-list { padding-left: 22px; }
+ul.simple-list li { margin: 6px 0; }
+.mermaid { background: transparent; text-align: center; margin: 12px auto; overflow-x: auto; }
+.mermaid svg { max-width: 100%; height: auto; }
+footer.bottom { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-soft);
+  border-top: 1px solid var(--border); padding: 10px 24px; display: flex;
+  align-items: center; gap: 10px; z-index: 50; backdrop-filter: blur(8px); }
+footer.bottom .progress { margin-left: auto; color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+footer.bottom button { background: var(--bg-card); border: 1px solid var(--border); color: var(--fg);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+footer.bottom button:hover { background: var(--bg); }
+footer.bottom button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+@media print {
+  header.top, footer.bottom { position: static; }
+  section.tab { display: block !important; page-break-after: always; }
+  nav.tabnav, .subtabs, .copy-btn { display: none !important; }
+  .person-pane { display: block !important; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="head-inner">
+    <h1>Multimodal AI Design Analysis Suite</h1>
+    <p class="sub">Interactive walkthrough &middot; Accelerator C7 Hackathon &middot; Group 1</p>
+    <nav class="tabnav" id="tabnav">
+      <button data-tab="cover" class="active">Cover</button>
+      <button data-tab="architecture">Architecture</button>
+      <button data-tab="people">Per-Person</button>
+      <button data-tab="sequence">Sequence</button>
+      <button data-tab="state">State</button>
+      <button data-tab="concepts">Concepts</button>
+      <button data-tab="mcp">MCP</button>
+      <button data-tab="scaling">Scaling</button>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+<!-- COVER -->
+<section id="tab-cover" class="tab active">
+  <div class="hero">
+    <h2>5 specialist AI agents review your UI design &mdash; in parallel.</h2>
+    <p class="lede">Upload a screenshot. A LangGraph orchestrator fans out to Visual, UX, Accessibility, Brand-Consistency, and Market-Research agents. Image RAG (CLIP + LanceDB) grounds the brand review against an in-house corpus. A synthesizer aggregates everything into one prioritized DesignReport. Same flow callable from any MCP-compatible client (Claude Code, etc.).</p>
+    <div class="cta">
+      <button class="btn" onclick="go('architecture')">Start the tour &rarr;</button>
+      <button class="btn ghost" onclick="go('sequence')">Jump to sequence</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="n">5</span><span class="l">parallel agents</span></div>
+    <div class="stat"><span class="n">6 / 6</span><span class="l">sprints covered</span></div>
+    <div class="stat"><span class="n">~4s</span><span class="l">end-to-end</span></div>
+    <div class="stat"><span class="n">5</span><span class="l">person team</span></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">How to use this page</h3>
+    <ul class="simple-list">
+      <li>Click the tabs at the top, or hit <strong>Play</strong> at the bottom to auto-advance.</li>
+      <li>The <strong>Sequence</strong> tab walks one click of "Run" through every owner's code.</li>
+      <li>Color chips identify ownership: <span class="badge badge-a">A</span> <span class="badge badge-b">B</span> <span class="badge badge-c">C</span> <span class="badge badge-d">D</span> <span class="badge badge-e">E</span>.</li>
+      <li>Print this page (Ctrl/Cmd+P) for a paper handout &mdash; print stylesheet flattens all tabs.</li>
+    </ul>
+  </div>
+</section>
+<!-- /COVER -->
+
+<!-- ARCHITECTURE -->
+<section id="tab-architecture" class="tab">
+  <h2>System architecture</h2>
+  <p class="lede">Solid arrows show runtime data flow. Dashed arrows show "consumes / instruments". Every internal seam is a Python <code>Protocol</code> &mdash; production and fake implementations both satisfy it.</p>
+
+  <div class="card">
+    <pre class="mermaid">
+flowchart TB
+    User[User] --> UI[Gradio UI&lt;br/&gt;ui/app.py]
+    UI --> Orchestrator[LangGraph Orchestrator&lt;br/&gt;src/agents/graph.py]
+
+    subgraph rag [Image RAG layer]
+        Embed[CLIP Embedder&lt;br/&gt;src/rag/embedder.py]
+        VStore[LanceDB Store&lt;br/&gt;src/rag/vector_store.py]
+        Retr[Retriever&lt;br/&gt;src/rag/retriever.py]
+        Embed --> VStore --> Retr
+    end
+
+    subgraph agents [LangGraph Specialist Agents]
+        VA[Visual Analysis]
+        UX[UX Critique]
+        MR[Market Research]
+        AC[Accessibility]
+        BR[Brand Consistency]
+        SY[Synthesizer]
+    end
+
+    Orchestrator --> VA
+    Orchestrator --> UX
+    Orchestrator --> MR
+    Orchestrator --> AC
+    Orchestrator --> BR
+    VA --> SY
+    UX --> SY
+    MR --> SY
+    AC --> SY
+    BR --> SY
+    SY --> Orchestrator
+
+    BR -. uses .-> Retr
+    MR -. uses .-> WebSearch[Tavily / DDG&lt;br/&gt;src/tools/web_search.py]
+    VA -. uses .-> LLM[Multimodal LLM&lt;br/&gt;src/llm/multimodal.py]
+    UX -. uses .-> LLM
+    AC -. uses .-> LLM
+    BR -. uses .-> LLM
+
+    LLM --> OR[OpenRouter Gateway&lt;br/&gt;src/llm/openrouter_client.py]
+    OR --> Cache[Response Cache&lt;br/&gt;src/llm/cost.py]
+
+    Orchestrator -. traces .-> LS[LangSmith]
+    Orchestrator --> Report[Final JSON Report&lt;br/&gt;data/reports/]
+    Report --> UI
+
+    MCP[MCP Server&lt;br/&gt;src/mcp/server.py] -. exposes .-> ExternalAgent[External Agents&lt;br/&gt;Claude Code / MCP clients]
+    MCP -. calls .-> Orchestrator
+    MCP -. calls .-> Retr
+    </pre>
+  </div>
+
+  <h3>Dependency-injection seam</h3>
+  <p>Every agent receives an <code>AgentDeps</code> container. Real implementations and fakes both satisfy the Protocols, so any teammate can run their slice in isolation.</p>
+  <div class="card">
+    <pre class="mermaid">
+flowchart LR
+    subgraph contracts [src/contracts.py]
+        P1[LLMClient]
+        P2[VisionLLM]
+        P3[Retriever]
+        P4[WebSearch]
+    end
+    subgraph real [Real impls]
+        R1[OpenRouterClient]
+        R2[OpenRouterVision]
+        R3[LanceRetriever]
+        R4[TavilySearch]
+    end
+    subgraph fakes [src/fakes/]
+        F1[FakeLLM]
+        F2[FakeVisionLLM]
+        F3[FakeRetriever]
+        F4[FakeSearch]
+    end
+    R1 -- implements --> P1
+    R2 -- implements --> P2
+    R3 -- implements --> P3
+    R4 -- implements --> P4
+    F1 -- implements --> P1
+    F2 -- implements --> P2
+    F3 -- implements --> P3
+    F4 -- implements --> P4
+    P1 --> AgentDeps
+    P2 --> AgentDeps
+    P3 --> AgentDeps
+    P4 --> AgentDeps
+    AgentDeps --> Agents[All agent nodes]
+    </pre>
+  </div>
+</section>
+<!-- /ARCHITECTURE -->
+
+<!-- PEOPLE -->
+<section id="tab-people" class="tab">
+  <h2>Each person's slice</h2>
+  <p class="lede">Pick the tab with your color. Solid arrows are owned files; dashed arrows are protocols/files this person <em>consumes</em> (built by someone else, but already mocked in <code>src/fakes/</code>).</p>
+
+  <div class="subtabs">
+    <button data-person="a" class="active">Person A &middot; Infra</button>
+    <button data-person="b">Person B &middot; RAG</button>
+    <button data-person="c">Person C &middot; Visual / Brand</button>
+    <button data-person="d">Person D &middot; UX / A11y</button>
+    <button data-person="e">Person E &middot; UI / Market / MCP</button>
+  </div>
+
+  <article class="person-pane active" data-person-pane="a">
+    <span class="badge badge-a">Person A</span>
+    <div class="role">Infra & Orchestration &mdash; the plumber and conductor</div>
+    <p class="mission">You build the pipes and you wave the baton. Nobody sees your code directly, but every other person's code flows through it. You own the contracts, the fakes (so others can build before you finish), the LLM gateway, the cost cache, the LangGraph orchestrator, the synthesizer, LangSmith tracing, and the evals harness.</p>
+    <h3>Architecture view</h3>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+    subgraph ownedA [Owned by Person A]
+        Cfg[src/config.py]
+        Contracts[src/contracts.py]
+        Fakes[src/fakes/]
+        OR[src/llm/openrouter_client.py]
+        VL[src/llm/multimodal.py]
+        Cost[src/llm/cost.py]
+        Base[src/agents/base.py]
+        Synth[src/agents/synthesizer.py]
+        Graph[src/agents/graph.py]
+        Trace[src/utils/tracing.py]
+        Evals[src/evals/]
+    end
+    Cfg --> OR
+    Cfg --> VL
+    Contracts --> Fakes
+    Contracts --> OR
+    Contracts --> VL
+    Cost -. wraps .-> OR
+    Cost -. wraps .-> VL
+    OR --> Base
+    VL --> Base
+    Base --> Graph
+    Synth --> Graph
+    Trace -. instruments .-> Graph
+    Graph --> Report[DesignReport JSON]
+    Evals -. drives .-> Graph
+    Graph -. consumes .-> AgentNodes[Agent run functions&lt;br/&gt;owned by C, D, E]
+      </pre>
+    </div>
+    <h3>Owns</h3>
+    <ul class="simple-list">
+      <li><code>src/config.py</code>, <code>src/contracts.py</code>, <code>src/fakes/*</code></li>
+      <li><code>src/llm/openrouter_client.py</code>, <code>src/llm/multimodal.py</code>, <code>src/llm/cost.py</code>, <code>src/llm/hf_local.py</code> (stub)</li>
+      <li><code>src/agents/base.py</code>, <code>src/agents/synthesizer.py</code>, <code>src/agents/graph.py</code></li>
+      <li><code>src/utils/tracing.py</code>, <code>src/evals/*</code>, <code>tests/conftest.py</code></li>
+    </ul>
+    <p class="magic"><strong>Demo magic moment:</strong> "watch all 5 agents run in parallel in this LangSmith trace &mdash; one click, four seconds, full report."</p>
+  </article>
+
+  <article class="person-pane" data-person-pane="b">
+    <span class="badge badge-b">Person B</span>
+    <div class="role">Image RAG &mdash; the librarian</div>
+    <p class="mission">You give the system memory. Without you, "design analysis" is just a chatbot opinion &mdash; with you, the suite can say "this candidate is 83% similar to these 4 in-house designs." You own CLIP embeddings, the LanceDB vector store, the retriever, and the ingest CLI.</p>
+    <h3>Architecture view</h3>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+    subgraph ownedB [Owned by Person B]
+        Embed[src/rag/embedder.py&lt;br/&gt;CLIP image+text]
+        VS[src/rag/vector_store.py&lt;br/&gt;LanceDB schema and IO]
+        Retr[src/rag/retriever.py&lt;br/&gt;LanceRetriever]
+        ImgU[src/tools/image_utils.py]
+        RagTool[src/tools/rag_tool.py&lt;br/&gt;LangChain Tool]
+        Ingest[scripts/ingest_references.py]
+    end
+    RefDir[(data/reference/*.png)] --> Ingest
+    Ingest --> Embed
+    Embed --> VS
+    VS --> Retr
+    Retr -. implements .-> RetrProto[contracts.Retriever]
+    Retr --> RagTool
+    ImgU -. used by .-> Embed
+    ImgU -. used by .-> AllAgents[Every agent uses image_utils]
+    RetrProto -. consumed by .-> BrandAgent[Brand agent - Person C]
+    RetrProto -. consumed by .-> UI[Gradio UI - Person E]
+    RetrProto -. consumed by .-> MCP[MCP server - Person E]
+      </pre>
+    </div>
+    <h3>Owns</h3>
+    <ul class="simple-list">
+      <li><code>src/rag/embedder.py</code>, <code>src/rag/vector_store.py</code>, <code>src/rag/retriever.py</code></li>
+      <li><code>src/tools/image_utils.py</code>, <code>src/tools/rag_tool.py</code></li>
+      <li><code>scripts/ingest_references.py</code>, <code>tests/person_b/*</code></li>
+    </ul>
+    <p class="magic"><strong>Demo magic moment:</strong> "we have 30 reference designs in the corpus and the suite finds the 4 most similar to the candidate, then grounds the brand-consistency review on them."</p>
+  </article>
+
+  <article class="person-pane" data-person-pane="c">
+    <span class="badge badge-c">Person C</span>
+    <div class="role">Visual + Brand Consistency &mdash; the eye and the brand cop</div>
+    <p class="mission">You see what is on the screen and whether it matches the brand. Two agents, one schema file. Visual analysis emits objective layout/palette/typography. Brand consistency uses Person B's retriever to ground its review in concrete comparisons.</p>
+    <h3>Architecture view</h3>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+    subgraph ownedC [Owned by Person C]
+        VA[src/agents/visual_analysis.py]
+        BR[src/agents/brand_consistency.py]
+        SchemaC[src/schemas/outputs.py&lt;br/&gt;VisualAnalysis, BrandConsistency]
+        TestC[tests/person_c/*]
+    end
+    VL[VisionLLM&lt;br/&gt;contracts.py] -. consumed by .-> VA
+    VL -. consumed by .-> BR
+    Retr[Retriever&lt;br/&gt;contracts.py] -. consumed by .-> BR
+    Deps[AgentDeps&lt;br/&gt;agents/base.py] -. injected into .-> VA
+    Deps -. injected into .-> BR
+    VA --> StateUpd1[returns - visual: VisualAnalysis]
+    BR --> StateUpd2[returns - brand: BrandConsistency]
+    StateUpd1 --> Graph[graph.py - Person A]
+    StateUpd2 --> Graph
+      </pre>
+    </div>
+    <p class="magic"><strong>Demo magic moment:</strong> "the suite matched the candidate to 3 in-corpus designs and flagged 2 typography drifts, with side-by-side evidence."</p>
+  </article>
+
+  <article class="person-pane" data-person-pane="d">
+    <span class="badge badge-d">Person D</span>
+    <div class="role">UX + Accessibility &mdash; the user advocate</div>
+    <p class="mission">You speak for the user. UX critique runs Nielsen heuristics; accessibility runs WCAG 2.2, with an optional opencv contrast pass that is deterministic and runs alongside the LLM.</p>
+    <h3>Architecture view</h3>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+    subgraph ownedD [Owned by Person D]
+        UX[src/agents/ux_critique.py]
+        AC[src/agents/accessibility.py]
+        SchemaD[src/schemas/outputs.py&lt;br/&gt;UXCritique, AccessibilityReport]
+        TestD[tests/person_d/*]
+    end
+    VL[VisionLLM&lt;br/&gt;contracts.py] -. consumed by .-> UX
+    VL -. consumed by .-> AC
+    Deps[AgentDeps&lt;br/&gt;agents/base.py] -. injected into .-> UX
+    Deps -. injected into .-> AC
+    Prompts[utils/prompts.py] -. used by .-> UX
+    Prompts -. used by .-> AC
+    UX --> StateUpd1[returns - ux: UXCritique]
+    AC --> StateUpd2[returns - accessibility: AccessibilityReport]
+    StateUpd1 --> Graph[graph.py - Person A]
+    StateUpd2 --> Graph
+      </pre>
+    </div>
+    <p class="magic"><strong>Demo magic moment:</strong> "the suite caught a 3.2:1 contrast ratio on the secondary CTA &mdash; measured by opencv, confirmed by the LLM, cited as WCAG 1.4.3."</p>
+  </article>
+
+  <article class="person-pane" data-person-pane="e">
+    <span class="badge badge-e">Person E</span>
+    <div class="role">Market + UI + MCP &mdash; the storyteller</div>
+    <p class="mission">You are the demo surface. You are also the only person whose code talks to the outside world &mdash; via the Gradio UI for humans, and via the MCP server for external coding agents.</p>
+    <h3>Architecture view</h3>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+    subgraph ownedE [Owned by Person E]
+        MR[src/agents/market_research.py]
+        WS[src/tools/web_search.py&lt;br/&gt;TavilySearch, DDGSearch]
+        UI[ui/app.py - Gradio]
+        MCP[src/mcp/server.py]
+    end
+    LLM[LLMClient&lt;br/&gt;contracts.py] -. consumed by .-> MR
+    WSProto[WebSearch&lt;br/&gt;contracts.py] -. consumed by .-> MR
+    WS -. implements .-> WSProto
+    Deps[AgentDeps] -. injected into .-> MR
+    MR --> StateUpd[returns - market: MarketResearch]
+    StateUpd --> Graph[graph.py - Person A]
+    UI --> RunGraph[graph.run_graph]
+    UI -. browses .-> Retr[Retriever - Person B]
+    MCP --> RunGraph
+    MCP -. exposes .-> Retr
+    External[External agents&lt;br/&gt;Claude Code / MCP clients] -. via stdio MCP .-> MCP
+      </pre>
+    </div>
+    <p class="magic"><strong>Demo magic moment:</strong> "judges, watch as I call <code>analyze_design</code> from inside an MCP-compatible coding agent &mdash; same report appears in chat, no UI in sight."</p>
+  </article>
+</section>
+<!-- /PEOPLE -->
+
+<!-- SEQUENCE -->
+<section id="tab-sequence" class="tab">
+  <h2>End-to-end sequence</h2>
+  <p class="lede">One click of "Run" by a junior designer reviewing a fintech dashboard mockup. Each lane is labeled with its owner. Calls inside the parallel block fire in the same event-loop tick.</p>
+
+  <div class="card">
+    <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as Designer
+    participant UI as Gradio UI&lt;br/&gt;Person E
+    participant G as graph.run_graph&lt;br/&gt;Person A
+    participant V as Visual Agent&lt;br/&gt;Person C
+    participant UX as UX Agent&lt;br/&gt;Person D
+    participant AC as A11y Agent&lt;br/&gt;Person D
+    participant BR as Brand Agent&lt;br/&gt;Person C
+    participant MR as Market Agent&lt;br/&gt;Person E
+    participant R as LanceRetriever&lt;br/&gt;Person B
+    participant W as TavilySearch&lt;br/&gt;Person E
+    participant L as VisionLLM/LLM&lt;br/&gt;Person A
+    participant SY as Synthesizer&lt;br/&gt;Person A
+
+    U->>UI: drop dashboard.png + Run
+    UI->>G: run_graph(image_path, instructions)
+    note over G: build_default_deps(use_real=True)&lt;br/&gt;compile StateGraph
+
+    par parallel fan-out at START
+        G->>V: await run(state, deps)
+        V->>L: vision.analyze(image, schema=VisualAnalysis)
+        L-->>V: VisualAnalysis
+    and
+        G->>UX: await run(state, deps)
+        UX->>L: vision.analyze(image, schema=UXCritique)
+        L-->>UX: UXCritique
+    and
+        G->>AC: await run(state, deps)
+        AC->>L: vision.analyze(image, schema=AccessibilityReport)
+        L-->>AC: AccessibilityReport
+    and
+        G->>BR: await run(state, deps)
+        BR->>R: retrieve_by_image(image, k=4)
+        R-->>BR: list of RetrievedRef
+        BR->>L: vision.analyze(composite, schema=BrandConsistency)
+        L-->>BR: BrandConsistency
+    and
+        G->>MR: await run(state, deps)
+        MR->>W: search(query)
+        W-->>MR: list of SearchResult
+        MR->>L: llm.complete(summary + hits, schema=MarketResearch)
+        L-->>MR: MarketResearch
+    end
+
+    V-->>G: visual
+    UX-->>G: ux
+    AC-->>G: accessibility
+    BR-->>G: brand
+    MR-->>G: market
+
+    G->>SY: await run(state, deps)
+    SY->>L: llm.complete(all 5 outputs, schema=DesignReport)
+    L-->>SY: DesignReport
+    SY-->>G: report
+
+    G-->>UI: DesignReport JSON streamed
+    UI-->>U: render Tab 2 + save data/reports/&lt;ts&gt;.json
+    </pre>
+  </div>
+
+  <h3>Step-by-step (click any step to expand)</h3>
+
+  <ol class="steps">
+
+    <li class="step"><details open><summary>
+      <span class="num">1</span>
+      <span class="title">User drops dashboard.png and clicks Run</span>
+      <span class="badge badge-e">Person E</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>The Gradio file uploader saves the image to <code>data/uploads/&lt;ts&gt;-dashboard.png</code>. The "Run" handler is a generator that streams progress events back to the UI.</p>
+      <div class="filepath"><code>ui/app.py</code><button class="copy-btn" data-copy="ui/app.py">Copy</button></div>
+<pre><code class="language-python">def on_run(image, instructions, model_tier):
+    # LOGIC: persist the upload, then call run_graph as an async generator,
+    # yielding (log_line, partial_state) tuples to the UI.
+    image_path = save_upload(image)
+    for event in run_graph_stream(image_path, instructions=instructions):
+        yield event</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">2</span>
+      <span class="title">UI calls run_graph(...)</span>
+      <span class="badge badge-shared">E &rarr; A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>The UI hands off to Person A's orchestrator. From here, all logic runs in the graph.</p>
+      <div class="filepath"><code>src/agents/graph.py</code><button class="copy-btn" data-copy="src/agents/graph.py">Copy</button></div>
+<pre><code class="language-python">async def run_graph(image_path: Path, *, instructions: str | None = None,
+                    deps: AgentDeps | None = None) -> DesignReport:
+    deps = deps or build_default_deps(use_real=True)
+    state = GraphState(image_path=image_path, instructions=instructions,
+                       image_b64=encode_image_to_data_url(image_path))
+    compiled = build_graph(deps)
+    final = await compiled.ainvoke(state)
+    return final["report"]</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">3</span>
+      <span class="title">AgentDeps container is built with real impls</span>
+      <span class="badge badge-a">Person A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>One container, four implementations of the four protocols. In tests this is built with fakes; in production with the real classes.</p>
+      <div class="filepath"><code>src/agents/base.py</code><button class="copy-btn" data-copy="src/agents/base.py">Copy</button></div>
+<pre><code class="language-python">@dataclass(frozen=True)
+class AgentDeps:
+    llm: LLMClient
+    vision: VisionLLM
+    retriever: Retriever
+    search: WebSearch
+    settings: Settings
+    logger: Any
+
+def build_default_deps(use_real: bool = False) -> AgentDeps:
+    if use_real:
+        return AgentDeps(
+            llm=OpenRouterClient(),
+            vision=OpenRouterVision(),
+            retriever=LanceRetriever(),
+            search=get_default_search(),
+            settings=settings, logger=get_logger("agents"))
+    return _fake_deps()</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">4</span>
+      <span class="title">LangGraph fans out to 5 agents in parallel</span>
+      <span class="badge badge-a">Person A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>Zero edges between the specialists. From <code>START</code> the graph runs all five concurrently with <code>asyncio.gather</code>; they all converge on <code>synthesizer</code>.</p>
+<pre><code class="language-python">g = StateGraph(GraphState)
+for name, fn in NODES.items():        # visual, ux, accessibility, brand, market
+    g.add_node(name, fn)
+    g.add_edge(START, name)
+    g.add_edge(name, "synthesizer")
+g.add_node("synthesizer", synth_node)
+g.add_edge("synthesizer", END)
+return g.compile()</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">5a</span>
+      <span class="title">Visual Analysis branch</span>
+      <span class="badge badge-c">Person C</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <div class="filepath"><code>src/agents/visual_analysis.py</code><button class="copy-btn" data-copy="src/agents/visual_analysis.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    out = await deps.vision.analyze(
+        system=prompts.visual_analysis_system(),
+        user=f"Analyze this design. {state.instructions or ''}",
+        images=[state.image_path],
+        schema=VisualAnalysis)
+    return {"visual": out}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">5b</span>
+      <span class="title">UX Critique branch</span>
+      <span class="badge badge-d">Person D</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>Heuristic-style critique. Each finding ties severity to evidence in the screenshot.</p>
+      <div class="filepath"><code>src/agents/ux_critique.py</code><button class="copy-btn" data-copy="src/agents/ux_critique.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    out = await deps.vision.analyze(
+        system=prompts.ux_critique_system(),
+        user="&lt;context&gt;...&lt;/context&gt;&lt;task&gt;Run a UX critique.&lt;/task&gt;",
+        images=[state.image_path],
+        schema=UXCritique)
+    return {"ux": out}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">5c</span>
+      <span class="title">Accessibility branch (with optional opencv contrast pass)</span>
+      <span class="badge badge-d">Person D</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <div class="filepath"><code>src/agents/accessibility.py</code><button class="copy-btn" data-copy="src/agents/accessibility.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    contrast = measure_min_contrast(state.image_path)   # opencv pass
+    out = await deps.vision.analyze(
+        system=prompts.accessibility_system(),
+        user=f"pre_computed_contrast={contrast:.2f}:1",
+        images=[state.image_path],
+        schema=AccessibilityReport)
+    return {"accessibility": out}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">5d</span>
+      <span class="title">Brand Consistency branch (uses Image RAG)</span>
+      <span class="badge badge-c">Person C</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>The only agent that uses the retriever. It pulls 4 nearest references from LanceDB and asks the LLM to compare them side-by-side with the candidate.</p>
+      <div class="filepath"><code>src/agents/brand_consistency.py</code><button class="copy-btn" data-copy="src/agents/brand_consistency.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    refs = await deps.retriever.retrieve_by_image(state.image_path, k=4)
+    composite = side_by_side([state.image_path, *(r.image_path for r in refs)])
+    out = await deps.vision.analyze(
+        system=prompts.brand_consistency_system(),
+        user=json.dumps([r.model_dump() for r in refs]),
+        images=[composite],
+        schema=BrandConsistency)
+    return {"brand": out}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">5e</span>
+      <span class="title">Market Research branch (web search + LLM)</span>
+      <span class="badge badge-e">Person E</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <div class="filepath"><code>src/agents/market_research.py</code><button class="copy-btn" data-copy="src/agents/market_research.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    summary = state.visual.short_summary if state.visual else await _quick_summary(state, deps)
+    hits = await deps.search.search(f"{summary} competitors and trends", k=5)
+    out = await deps.llm.complete(
+        system=prompts.market_research_system(),
+        user=f"summary: {summary}\nhits: {json.dumps([h.model_dump() for h in hits])}",
+        schema=MarketResearch)
+    return {"market": out}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">6</span>
+      <span class="title">Brand agent calls the retriever</span>
+      <span class="badge badge-shared">C &rarr; B</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>The handoff between two slices: Person C's agent code calls Person B's retriever via the <code>Retriever</code> protocol. C never imports anything from <code>src/rag/</code> &mdash; only the protocol.</p>
+<pre><code class="language-python">refs = await deps.retriever.retrieve_by_image(state.image_path, k=4)
+# refs: list[RetrievedRef]  (id, score, image_path, metadata)</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">7</span>
+      <span class="title">Retriever embeds the query and queries LanceDB</span>
+      <span class="badge badge-b">Person B</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <div class="filepath"><code>src/rag/retriever.py</code><button class="copy-btn" data-copy="src/rag/retriever.py">Copy</button></div>
+<pre><code class="language-python">async def retrieve_by_image(self, image_path, k=5) -> list[RetrievedRef]:
+    vec = self.embedder.embed_image(image_path)         # 512-d CLIP
+    rows = self.store.query_by_vector(vec, k=k)         # LanceDB k-NN
+    return [self._to_ref(r) for r in rows if (1 - r["_distance"]) > 0.2]</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">8</span>
+      <span class="title">Market agent calls web search</span>
+      <span class="badge badge-e">Person E</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>Tavily preferred (LLM-friendly snippets); DuckDuckGo fallback if no key.</p>
+      <div class="filepath"><code>src/tools/web_search.py</code><button class="copy-btn" data-copy="src/tools/web_search.py">Copy</button></div>
+<pre><code class="language-python">async def search(self, query: str, k: int = 5) -> list[SearchResult]:
+    raw = await self._client.search(query, max_results=k, include_answer=False)
+    return [SearchResult(title=r["title"], url=r["url"], snippet=r["content"])
+            for r in raw["results"]]</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">9</span>
+      <span class="title">Each agent calls the LLM via OpenRouter</span>
+      <span class="badge badge-a">Person A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>OpenAI SDK against <code>https://openrouter.ai/api/v1</code> with <code>response_format={"type":"json_schema",...}</code>. Returns a validated Pydantic instance.</p>
+      <div class="filepath"><code>src/llm/openrouter_client.py</code><button class="copy-btn" data-copy="src/llm/openrouter_client.py">Copy</button></div>
+<pre><code class="language-python">async def complete(self, *, system, user, schema, model=None, temperature=None):
+    resp = await self._client.chat.completions.create(
+        model=model or settings.default_text_model,
+        messages=[{"role":"system","content":system},
+                  {"role":"user","content":user}],
+        response_format={"type":"json_schema","json_schema":{
+            "name": schema.__name__, "schema": schema.model_json_schema()}},
+        temperature=temperature or settings.default_temperature)
+    return schema.model_validate_json(resp.choices[0].message.content)</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">10</span>
+      <span class="title">Cost cache may short-circuit any LLM call</span>
+      <span class="badge badge-a">Person A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>Disk-backed JSON cache. The same screenshot returns instantly on the second run &mdash; demos are free.</p>
+      <div class="filepath"><code>src/llm/cost.py</code><button class="copy-btn" data-copy="src/llm/cost.py">Copy</button></div>
+<pre><code class="language-python">def cached(fn):
+    async def wrapper(self, **kw):
+        key = prompt_hash(**kw, schema_name=kw["schema"].__name__,
+                          model=kw.get("model") or settings.default_text_model)
+        if (hit := cache.get(key)) is not None:
+            return kw["schema"].model_validate(hit)
+        result = await fn(self, **kw)
+        cache.put(key, result.model_dump())
+        return result
+    return wrapper</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">11</span>
+      <span class="title">Synthesizer aggregates all 5 outputs into one DesignReport</span>
+      <span class="badge badge-a">Person A</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <div class="filepath"><code>src/agents/synthesizer.py</code><button class="copy-btn" data-copy="src/agents/synthesizer.py">Copy</button></div>
+<pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
+    payload = json.dumps({k: getattr(state, k).model_dump()
+                          for k in ("visual","ux","accessibility","brand","market")})
+    report = await deps.llm.complete(
+        system=prompts.synthesizer_system(),
+        user=payload,
+        schema=DesignReport)
+    save_report(report, state.image_path)
+    return {"report": report}</code></pre>
+    </div></details></li>
+
+    <li class="step"><details><summary>
+      <span class="num">12</span>
+      <span class="title">Report saved + UI renders</span>
+      <span class="badge badge-shared">A &rarr; E</span>
+      <span class="chev">&#9660;</span>
+    </summary><div class="step-body">
+      <p>The report lands at <code>data/reports/&lt;ts&gt;-dashboard.json</code>. The UI's "Report" tab populates: overall score, top strengths, top recommendations, accordion of findings, gallery of retrieved references.</p>
+<pre><code class="language-python"># ui/app.py - render_report
+def render_report(report: DesignReport):
+    return (
+        gr.Markdown(f"## Score: {report.overall_score}/100"),
+        gr.Markdown("\n".join(f"- {s}" for s in report.top_strengths)),
+        gr.JSON(report.model_dump()))</code></pre>
+    </div></details></li>
+
+  </ol>
+</section>
+<!-- /SEQUENCE -->
+
+<!-- STATE -->
+<section id="tab-state" class="tab">
+  <h2>GraphState evolution</h2>
+  <p class="lede">The state object only grows; no agent ever overwrites another agent's field. That is what makes parallel fan-out safe.</p>
+
+  <div class="card">
+    <pre class="mermaid">
+flowchart LR
+    S0["State at START&lt;br/&gt;image_path&lt;br/&gt;image_b64&lt;br/&gt;instructions&lt;br/&gt;(everything else: null)"]
+    S1["State after parallel fan-out&lt;br/&gt;visual: VisualAnalysis&lt;br/&gt;ux: UXCritique&lt;br/&gt;accessibility: AccessibilityReport&lt;br/&gt;brand: BrandConsistency&lt;br/&gt;market: MarketResearch&lt;br/&gt;report: null"]
+    S2["State after synthesizer&lt;br/&gt;report: DesignReport&lt;br/&gt;top_strengths&lt;br/&gt;top_recommendations&lt;br/&gt;overall_score"]
+    S0 --> |"5 agents write&lt;br/&gt;in parallel"| S1
+    S1 --> |"synthesizer&lt;br/&gt;aggregates"| S2
+    </pre>
+  </div>
+
+  <h3>S0 &mdash; just after run_graph(...)</h3>
+  <div class="card tight">
+<pre><code class="language-json">{
+  "image_path": "data/uploads/2026-06-13T19-02-dashboard.png",
+  "image_b64": "iVBORw0KGgoAAA...",
+  "instructions": "audience is retail banking customers in India",
+  "visual": null,
+  "ux": null,
+  "accessibility": null,
+  "brand": null,
+  "market": null,
+  "report": null
+}</code></pre>
+  </div>
+
+  <h3>S1 &mdash; after the 5 specialists return</h3>
+  <div class="card tight">
+<pre><code class="language-json">{
+  "image_path": "data/uploads/2026-06-13T19-02-dashboard.png",
+  "instructions": "audience is retail banking customers in India",
+  "visual": {
+    "palette": ["#0A2540", "#FFC400", "#F5F7FA", "#1F2937"],
+    "density_score": 0.62,
+    "typography": "stacked sans-serif, hierarchy 4 levels"
+  },
+  "ux": {
+    "heuristic_violations": [
+      { "title": "Low affordance on secondary CTA", "severity": "medium",
+        "evidence": "ghost button with 1px border on light gray", "recommendation": "increase contrast" }
+    ],
+    "cognitive_load_score": 0.71
+  },
+  "accessibility": {
+    "wcag_findings": [
+      { "title": "Insufficient color contrast", "severity": "high",
+        "evidence": "secondary CTA 3.2:1 vs WCAG AA 4.5:1",
+        "recommendation": "darken text or background" }
+    ],
+    "contrast_pass": false,
+    "est_min_touch_target_px": 36
+  },
+  "brand": {
+    "consistency_score": 0.78,
+    "color_drift": "secondary teal 12% off corpus median",
+    "comparable_refs": [{ "id": "ref-007", "score": 0.83 }, { "id": "ref-014", "score": 0.79 }]
+  },
+  "market": {
+    "competitors": [
+      { "name": "Jupiter", "url": "https://jupiter.money", "why_relevant": "retail fintech IN" },
+      { "name": "Fi Money", "url": "https://fi.money", "why_relevant": "Gen-Z UI patterns" }
+    ],
+    "trends": ["card stacking", "soft neumorphism receding", "mandatory dark mode"],
+    "citations": ["https://...", "https://..."]
+  },
+  "report": null
+}</code></pre>
+  </div>
+
+  <h3>S2 &mdash; after synthesizer</h3>
+  <div class="card tight">
+<pre><code class="language-json">{
+  "report": {
+    "overall_score": 72.5,
+    "top_strengths": [
+      "Clear hierarchy in primary stats panel",
+      "Consistent color usage with brand palette",
+      "Strong information density without clutter"
+    ],
+    "top_recommendations": [
+      { "title": "Fix secondary CTA contrast",
+        "rationale": "WCAG AA failure on key conversion element",
+        "effort": "S", "impact": "L" },
+      { "title": "Tighten typography drift to corpus median",
+        "rationale": "two weights diverge from established system",
+        "effort": "M", "impact": "M" }
+    ]
+  }
+}</code></pre>
+  </div>
+</section>
+<!-- /STATE -->
+
+<!-- CONCEPTS -->
+<section id="tab-concepts" class="tab">
+  <h2>Sprint concept coverage</h2>
+  <p class="lede">After all the cuts, every Sprint still has a real file the judges can point at. 6 sprints, 16 concepts, mapped 1-to-1 to source paths.</p>
+
+  <table class="coverage">
+    <thead><tr><th>Sprint</th><th>Concept</th><th>Where it lives</th><th>How we use it</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Prompt engineering (XML/JSON)</td><td><code>src/utils/prompts.py</code></td><td>Every agent system prompt; XML-tagged user prompts.</td></tr>
+      <tr><td>1</td><td>OpenAI Chat Completion standard</td><td><code>src/llm/openrouter_client.py</code></td><td>OpenAI SDK against OpenRouter base URL.</td></tr>
+      <tr><td>2</td><td>Gradio UI</td><td><code>ui/app.py</code></td><td>Upload, streaming progress, structured report tabs.</td></tr>
+      <tr><td>2</td><td>HuggingFace local model</td><td><code>src/llm/hf_local.py</code></td><td>Thin <code>LLMClient</code> stub using transformers.</td></tr>
+      <tr><td>3</td><td>RAG end-to-end</td><td><code>src/rag/*</code></td><td>Image RAG: ingest, embed, store, query.</td></tr>
+      <tr><td>3</td><td>Chunking + embeddings</td><td><code>src/rag/embedder.py</code></td><td>open_clip ViT-B-32 image+text embeddings.</td></tr>
+      <tr><td>3</td><td>LanceDB</td><td><code>src/rag/vector_store.py</code></td><td>Persistent k-NN store with optional metadata filters.</td></tr>
+      <tr><td>3</td><td>LlamaIndex</td><td><code>src/rag/retriever.py</code></td><td>Imported as a documented secondary path.</td></tr>
+      <tr><td>4</td><td>Evals</td><td><code>src/evals/harness.py</code></td><td>Schema-validity score over 3-5 golden cases.</td></tr>
+      <tr><td>4</td><td>MCP</td><td><code>src/mcp/server.py</code></td><td>Two tools: <code>analyze_design</code> and <code>search_designs</code>.</td></tr>
+      <tr><td>5</td><td>LangChain tools</td><td><code>src/tools/rag_tool.py</code></td><td>BaseTool wrapping the Retriever protocol.</td></tr>
+      <tr><td>5</td><td>LangGraph multi-agent</td><td><code>src/agents/graph.py</code></td><td>StateGraph with parallel fan-out and synthesizer.</td></tr>
+      <tr><td>5</td><td>LangSmith tracing</td><td><code>src/utils/tracing.py</code></td><td>Graceful no-op if key missing; one trace per request.</td></tr>
+      <tr><td>5</td><td>Cost optimization</td><td><code>src/llm/cost.py</code></td><td>Disk-backed JSON cache keyed by prompt hash.</td></tr>
+      <tr><td>6</td><td>Parallel multi-agent</td><td><code>src/agents/graph.py</code></td><td>5 specialist branches run with asyncio.gather.</td></tr>
+      <tr><td>6</td><td>Structured aggregated output</td><td><code>src/agents/synthesizer.py</code></td><td>Merges 5 typed outputs into one DesignReport.</td></tr>
+    </tbody>
+  </table>
+</section>
+<!-- /CONCEPTS -->
+
+<!-- MCP -->
+<section id="tab-mcp" class="tab">
+  <h2>Same flow over MCP</h2>
+  <p class="lede">The MCP server exposes <code>analyze_design</code> and <code>search_designs</code> over stdio JSON-RPC. Any MCP-compatible client (Claude Code, etc.) can call the suite without going through the UI.</p>
+
+  <div class="card">
+    <pre class="mermaid">
+flowchart LR
+    External[External agent&lt;br/&gt;Claude Code or MCP client]
+    subgraph mcpLayer [src/mcp/server.py - Person E]
+        T1[Tool: analyze_design]
+        T2[Tool: search_designs]
+    end
+    subgraph internal [Internal services]
+        Graph[run_graph&lt;br/&gt;src/agents/graph.py - Person A]
+        Retr[LanceRetriever&lt;br/&gt;src/rag/retriever.py - Person B]
+    end
+    External -- stdio JSON-RPC --> mcpLayer
+    T1 --> Graph
+    T2 --> Retr
+    Graph -- "brand agent uses" --> Retr
+    </pre>
+  </div>
+
+  <h3>Wire it into your MCP client</h3>
+  <p>Add this to your client&apos;s <code>mcp.json</code> (typical paths: <code>~/.config/claude-code/mcp.json</code> or whatever your client documents):</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "design-suite": {
+      "command": "python",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "/path/to/ai_c7_hackathon",
+      "env": { "OPENROUTER_API_KEY": "sk-or-..." }
+    }
+  }
+}</code></pre>
+
+  <h3>The client calls our server</h3>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "analyze_design",
+    "arguments": {
+      "image_path": "/abs/path/to/dashboard.png",
+      "instructions": "audience is retail banking customers in India"
+    }
+  }
+}</code></pre>
+
+  <h3>Server responds with the same DesignReport</h3>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "content": [
+      { "type": "text", "text": "{ \"overall_score\": 72.5, \"top_strengths\": [...], \"top_recommendations\": [...] }" }
+    ]
+  }
+}</code></pre>
+
+  <p style="color: var(--fg-muted); margin-top:18px"><strong>Q: Is Image RAG a MCP?</strong> No. Image RAG is a retrieval technique (CLIP + LanceDB). MCP is a wire protocol. They are orthogonal &mdash; we use both. The <code>search_designs</code> MCP tool is one way the outside world reaches our Image RAG; the brand agent is another way the inside world reaches it. RAG sits at the bottom; both clients sit on top.</p>
+</section>
+<!-- /MCP -->
+
+<!-- SCALING -->
+<section id="tab-scaling" class="tab">
+  <h2>Hackathon vs production</h2>
+  <p class="lede">Honest answer: this is a prototype. It is correctly factored to be made scalable, but several pieces would need to change before real traffic.</p>
+
+  <h3>Hackathon-grade today</h3>
+  <ul class="simple-list">
+    <li>In-process LangGraph &mdash; fine for ~10 concurrent uploads.</li>
+    <li>Disk-backed JSON cache for LLM responses.</li>
+    <li>Embedded LanceDB in the app process.</li>
+    <li>Single-process Gradio with its built-in queue.</li>
+    <li>stdio MCP server &mdash; one client at a time.</li>
+    <li>No auth, no multi-tenancy.</li>
+    <li>All settings in one <code>.env</code>.</li>
+  </ul>
+
+  <h3>What would change for production scale (priority order)</h3>
+  <ul class="scale-list">
+    <li><strong>Job queue</strong> &mdash; Celery+Redis or Temporal. Each upload becomes a durable task; UI subscribes via WebSocket/SSE.</li>
+    <li><strong>Async everywhere</strong> &mdash; CI test ensures no sync IO leaks into agent paths.</li>
+    <li><strong>Redis cache</strong> &mdash; replace disk cache; LRU eviction, TTL, hit-rate metrics.</li>
+    <li><strong>Vector DB at scale</strong> &mdash; LanceDB on S3, or migrate to managed Pinecone/Qdrant once corpus exceeds 100k docs.</li>
+    <li><strong>Rate limit + budget</strong> &mdash; leaky-bucket per user; per-tenant spend ceiling enforced inside <code>cost.py</code>.</li>
+    <li><strong>Multi-tenancy</strong> &mdash; tenant_id column in LanceDB, per-tenant API keys, per-tenant LangSmith projects.</li>
+    <li><strong>Auth + transport</strong> &mdash; swap stdio MCP for HTTP MCP behind a reverse proxy; OAuth / API tokens.</li>
+    <li><strong>Structured logs</strong> &mdash; loguru &rarr; JSON to stdout, shipped via Vector/Fluent Bit to Loki or ELK.</li>
+    <li><strong>Metrics + dashboards</strong> &mdash; Prometheus counters for agent latency, cache hit rate, eval pass rate, $/run; Grafana panels.</li>
+    <li><strong>Horizontal scaling</strong> &mdash; agent workers are stateless; pull jobs from the queue; auto-scale on queue depth.</li>
+    <li><strong>GPU pool for CLIP</strong> &mdash; batch image embeddings on a small GPU pool when ingest throughput grows; CPU is the fallback.</li>
+    <li><strong>Eval as CI gate</strong> &mdash; the golden set runs on every PR; merges blocked if pass rate drops below threshold.</li>
+    <li><strong>Cost ceilings + alerting</strong> &mdash; per-tenant budgets, Slack alert on overage.</li>
+  </ul>
+
+  <h3>Why this is a scoring win</h3>
+  <ul class="simple-list">
+    <li><strong>Difficulty Score:</strong> this list proves we understand the production design space, not just hackathon code.</li>
+    <li><strong>Code Quality:</strong> agents are pure (<code>def run(state, deps)</code>), the LLM lives behind a Protocol, IO is contained &mdash; each item above is a one-file swap, not a rewrite.</li>
+    <li><strong>Concept Score:</strong> Sprint 5 cost-optimization concepts (caching, batching, tiering) are already in the design; production just pushes the same primitives into Redis instead of disk.</li>
+  </ul>
+</section>
+<!-- /SCALING -->
+
+</main>
+
+<footer class="bottom">
+  <button id="btn-prev">&larr; Prev</button>
+  <button id="btn-play" class="primary">&#9654; Play</button>
+  <button id="btn-next">Next &rarr;</button>
+  <span class="progress" id="progress">1 / 8</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+<script>
+const TABS = ['cover','architecture','people','sequence','state','concepts','mcp','scaling'];
+let current = 0;
+function go(name) {
+  const idx = TABS.indexOf(name); if (idx < 0) return;
+  current = idx;
+  document.querySelectorAll('section.tab').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('#tabnav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.getElementById('progress').textContent = (idx + 1) + ' / ' + TABS.length;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('#tabnav button').forEach(btn => btn.addEventListener('click', () => go(btn.dataset.tab)));
+document.getElementById('btn-prev').addEventListener('click', () => { if (current > 0) go(TABS[current - 1]); });
+document.getElementById('btn-next').addEventListener('click', () => { if (current < TABS.length - 1) go(TABS[current + 1]); });
+let playing = null;
+const playBtn = document.getElementById('btn-play');
+playBtn.addEventListener('click', () => {
+  if (playing) { clearInterval(playing); playing = null; playBtn.innerHTML = '&#9654; Play'; playBtn.classList.add('primary'); }
+  else {
+    playing = setInterval(() => {
+      if (current < TABS.length - 1) go(TABS[current + 1]);
+      else { clearInterval(playing); playing = null; playBtn.innerHTML = '&#9654; Play'; playBtn.classList.add('primary'); }
+    }, 9000);
+    playBtn.innerHTML = '&#9208; Pause'; playBtn.classList.remove('primary');
+  }
+});
+document.body.addEventListener('click', e => {
+  if (e.target.classList.contains('copy-btn')) {
+    if (navigator.clipboard) navigator.clipboard.writeText(e.target.dataset.copy || '');
+    const orig = e.target.textContent; e.target.textContent = '\u2713 Copied';
+    setTimeout(() => e.target.textContent = orig, 1200);
+  }
+});
+document.body.addEventListener('click', e => {
+  const sb = e.target.closest('.subtabs button'); if (!sb) return;
+  const wrapper = sb.closest('section');
+  wrapper.querySelectorAll('.subtabs button').forEach(b => b.classList.remove('active'));
+  wrapper.querySelectorAll('.person-pane').forEach(p => p.classList.remove('active'));
+  sb.classList.add('active');
+  wrapper.querySelector('[data-person-pane="' + sb.dataset.person + '"]').classList.add('active');
+});
+const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: isDark ? 'dark' : 'default',
+  flowchart: { curve: 'basis', useMaxWidth: true },
+  sequence: { actorMargin: 60, useMaxWidth: true }
+});
+// Mermaid cannot lay out diagrams inside display:none containers (curve='basis'
+// needs real geometry). Temporarily activate every tab+pane, render, then restore.
+async function renderAllMermaid() {
+  const tabs = document.querySelectorAll('section.tab');
+  const panes = document.querySelectorAll('.person-pane');
+  const wasActiveTab = [...tabs].map(s => s.classList.contains('active'));
+  const wasActivePane = [...panes].map(p => p.classList.contains('active'));
+  tabs.forEach(s => s.classList.add('active'));
+  panes.forEach(p => p.classList.add('active'));
+  try { await mermaid.run({ querySelector: '.mermaid' }); }
+  catch (e) { console.error('mermaid.run failed:', e); }
+  tabs.forEach((s, i) => s.classList.toggle('active', wasActiveTab[i]));
+  panes.forEach((p, i) => p.classList.toggle('active', wasActivePane[i]));
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderAllMermaid);
+else renderAllMermaid();
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight') document.getElementById('btn-next').click();
+  if (e.key === 'ArrowLeft') document.getElementById('btn-prev').click();
+});
+</script>
+</body>
+</html>

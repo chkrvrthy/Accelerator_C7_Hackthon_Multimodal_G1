@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "design-analysis-suite"
+version = "0.1.0"
+description = "Multimodal AI Design Analysis Suite — multi-agent product/UI design reviewer"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Accelerator C7 Hackathon — Group 1 (Multimodal)" }
+]
+license = { text = "MIT" }
+# Runtime deps live in requirements/*.txt so each teammate can install only
+# the slice they own. `pip install -e ".[dev]"` only adds dev tooling.
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-cov>=5.0", "pytest-asyncio>=0.24", "ruff>=0.6", "black>=24.8", "mypy>=1.11", "ipykernel>=6.29"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+# ----------------------------------------------------------------------------
+# Tooling
+# ----------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["data", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+# NOTE: asyncio_mode is set by pytest-asyncio when installed (see requirements/dev.txt).
+# We do not declare it here to keep pytest happy without the plugin in minimal envs.
+markers = [
+    "person_a: infra and orchestration",
+    "person_b: image RAG",
+    "person_c: visual and brand agents",
+    "person_d: ux and accessibility agents",
+    "person_e: market, UI, MCP",
+    "real_api: requires a real API key (OPENROUTER_API_KEY or TAVILY_API_KEY)",
+    "slow: takes more than 1 second",
+]

@@ -1,0 +1,3 @@
+# Person C — Visual + Brand Consistency agents.
+# Pure agent code; no extra runtime deps beyond base.
+-r base.txt

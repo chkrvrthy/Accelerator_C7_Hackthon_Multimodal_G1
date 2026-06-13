@@ -1,0 +1,7 @@
+# One-stop install pulling every slice + dev tools.
+-r person-a-infra.txt
+-r person-b-rag.txt
+-r person-c-agents.txt
+-r person-d-agents.txt
+-r person-e-ui.txt
+-r dev.txt

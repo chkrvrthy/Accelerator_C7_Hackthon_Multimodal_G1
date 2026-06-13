@@ -1,0 +1,6 @@
+# Optional install for src/llm/hf_local.py (Sprint 2 HuggingFace concept).
+# This is NOT pulled by any default install. Run only if you want the local
+# model stub to actually do work:
+#     pip install -r requirements/optional-hf.txt
+transformers>=4.44.0
+accelerate>=0.34.0

@@ -1,0 +1,14 @@
+# --------------------------------------------------------------------------
+# Mandatory for every teammate. Imported by src/config.py, src/schemas/,
+# src/contracts.py, every agent, and every test. If you only own one slice
+# you still need this file.
+# --------------------------------------------------------------------------
+openai>=1.50.0
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+python-dotenv>=1.0.1
+loguru>=0.7.2
+rich>=13.9.0
+Pillow>=10.4.0
+numpy>=1.26.0
+requests>=2.32.0

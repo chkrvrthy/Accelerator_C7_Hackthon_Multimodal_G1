@@ -1,0 +1,4 @@
+# Person D — UX + Accessibility agents.
+# opencv-python is used for the deterministic contrast pass in accessibility.py.
+-r base.txt
+opencv-python>=4.10.0
