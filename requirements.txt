@@ -1,3 +1,41 @@
-# Top-level alias. Pulls every slice via requirements/all.txt.
-# Per-slice installs live under requirements/person-<x>-*.txt.
--r requirements/all.txt
+# Hugging Face Spaces entry point requirement file.
+#
+# HF Spaces resolves dependencies from the file named ``requirements.txt``
+# at the repo root. This is the lean superset needed to run the Gradio
+# app in a Spaces container — runtime deps only, no dev / test tools.
+#
+# For local dev, use the per-slice files in ``requirements/`` instead.
+
+# Web app
+gradio>=6.18.0,<7.0
+
+# Schemas + settings
+pydantic>=2.7
+pydantic-settings>=2.4
+loguru>=0.7
+
+# LLM + retry
+openai>=1.40
+tenacity>=9.0
+python-dotenv>=1.0
+
+# RAG
+lancedb>=0.13
+open_clip_torch>=2.24
+pillow>=10.4
+numpy>=1.26
+torch>=2.3.0
+
+# Vision pre-tools
+opencv-python-headless>=4.10
+
+# Web search (graceful no-op without keys)
+tavily-python>=0.5
+duckduckgo-search>=6.2
+
+# Graph orchestration
+langgraph>=0.2
+langchain-core>=0.3
+
+# Optional but cheap to include
+langsmith>=0.1

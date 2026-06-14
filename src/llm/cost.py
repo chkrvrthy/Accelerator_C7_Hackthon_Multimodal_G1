@@ -64,6 +64,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from src.llm.cost_tracker import get_cost_tracker
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -233,6 +234,10 @@ def cached(fn: F) -> F:
             try:
                 result = schema.model_validate(hit)
                 log.debug("cache.hit %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
+                # LOGIC: record the hit so the Settings tab shows
+                # "cache saved N calls". Zero-token row, but with the
+                # model name so per-model breakdowns stay accurate.
+                get_cost_tracker().record_call(model=model, cache_hit=True)
                 return result
             except Exception as e:
                 log.warning(

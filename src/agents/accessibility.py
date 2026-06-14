@@ -96,10 +96,33 @@ def _measure_contrast_pass(image_path: str) -> bool | None:
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, AccessibilityReport]:
     """Run the Accessibility agent."""
+    # PRE-TOOL: estimate the smallest text region in pixels so the LLM
+    # has measured ground truth for WCAG 1.4.4 (text resize). Saves
+    # output tokens because the model does not have to estimate sizes
+    # from the screenshot itself.
+    from src.agents.tools import call_tool
+
+    measured_text = call_tool("accessibility.estimate_text_size", image_path=state.image_path)
+    user_text = accessibility_user(state)
+    if measured_text:
+        user_text += (
+            "\n\n<measured_facts>\n"
+            f"smallest text region: ~{measured_text['smallest_text_px']} px\n"
+            f"median text region: ~{measured_text['median_text_px']} px\n"
+            f"largest text region: ~{measured_text['largest_text_px']} px\n"
+            "Use these as ground truth for WCAG 1.4.4 (resize text). "
+            "Do not invent different numbers.\n"
+            "</measured_facts>"
+        )
+        log.info(
+            "agent.accessibility: pre-tool text-size measurements %s",
+            measured_text,
+        )
+
     result = run_with_schema(
         agent_name="agent.accessibility",
         system=accessibility_system(),
-        user=accessibility_user(state),
+        user=user_text,
         images=[Path(state.image_path)],
         schema=AccessibilityReport,
         deps=deps,

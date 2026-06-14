@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
+from src.agents.tools import call_tool
 from src.schemas.outputs import GraphState, VisualAnalysis
 from src.utils.logger import get_logger
 from src.utils.prompts import visual_analysis_system, visual_analysis_user
@@ -83,17 +84,42 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, VisualAnalysis]:
     Returns:
         ``{"visual": VisualAnalysis}`` partial-state dict.
     """
+    # PRE-TOOL: extract a deterministic palette before the LLM sees the
+    # image. This grounds the model in measured pixel facts, prevents
+    # hallucinated hex codes, and saves output tokens (the model has
+    # less to invent). When numpy/PIL is missing, the tool returns None
+    # and we fall back to LLM-only palette extraction.
+    measured = call_tool("visual.extract_palette", image_path=state.image_path)
+    user_text = visual_analysis_user(state)
+    if measured and measured.get("palette"):
+        user_text += (
+            "\n\n<measured_facts>\n"
+            f"palette (k-means in CIELab, ground truth): "
+            f"{', '.join(measured['palette'])}\n"
+            "Use these as anchors for the palette field. Refine names "
+            "and accents but do NOT change the hex codes — they were "
+            "measured from the actual image.\n"
+            "</measured_facts>"
+        )
+        log.info("agent.visual: pre-tool palette=%s", measured["palette"])
+
     # Prompt construction lives in utils.prompts so iteration happens in one
     # file, not scattered across agents (the prompt registry is the seam).
     result = run_with_schema(
         agent_name="agent.visual",
         system=visual_analysis_system(),
-        user=visual_analysis_user(state),
+        user=user_text,
         images=[Path(state.image_path)],
         schema=VisualAnalysis,
         deps=deps,
     )
     assert isinstance(result, VisualAnalysis)
+
+    # POST-TOOL: if the LLM dropped or replaced the measured palette,
+    # restore the measured one. The LLM is good at narrative; the tool
+    # is good at hex codes. This split keeps both honest.
+    if measured and measured.get("palette") and not result.palette:
+        result.palette = list(measured["palette"])
     return {"visual": result}
 
 

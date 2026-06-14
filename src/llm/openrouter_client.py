@@ -64,6 +64,11 @@ from pydantic import BaseModel, ValidationError
 
 from src.config import Settings, settings
 from src.llm.cost import cached
+from src.llm.cost_tracker import (
+    CircuitOpenError,
+    get_circuit_breaker,
+    get_cost_tracker,
+)
 from src.utils.logger import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -74,6 +79,13 @@ log = get_logger(__name__)
 # LOGIC: only retry on transient transport-layer errors. Auth / 4xx are
 # user-actionable and re-raise immediately so the operator sees them.
 _RETRYABLE_OPENAI_ERRORS = ("RateLimitError", "APIConnectionError", "APITimeoutError")
+# Hard failures that should trip the circuit breaker — there's no point
+# letting all 5 specialist agents discover the same dead key independently.
+_HARD_FAILURES = (
+    "AuthenticationError",
+    "PermissionDeniedError",
+    "BadRequestError",
+)
 _MAX_RETRIES = 3
 
 
@@ -146,7 +158,20 @@ class OpenRouterClient:
         Public-API consumers call ``complete`` (text) or ``OpenRouterVision.analyze``
         (multimodal); this method is shared so retry / fallback / validation logic
         is in exactly one place.
+
+        Resilience layers (in order):
+          1. Circuit breaker — fast-fail when a previous call hard-failed.
+          2. Transient retries — RateLimit / APIConnection / APITimeout, 3x.
+          3. json_schema → json_object downgrade on BadRequestError, once.
+          4. Cost telemetry — tokens reported to ``CostTracker`` on success.
         """
+        breaker = get_circuit_breaker("openrouter")
+        if not breaker.allow():
+            # LOGIC: short-circuit BEFORE we make a network call. Saves the
+            # 30-second cliff users were hitting when 5 agents hit a dead key.
+            raise CircuitOpenError(breaker)
+
+        tracker = get_cost_tracker()
         rf = self._schema_payload(schema)
         last_exc: Exception | None = None
 
@@ -160,6 +185,16 @@ class OpenRouterClient:
                     max_tokens=self.settings.default_max_tokens,
                 )
                 raw = resp.choices[0].message.content or ""
+                # Record token usage when the provider returned it — this
+                # is the only reliable source. Best-effort: any missing
+                # field falls back to 0 and the tracker stays correct.
+                usage = getattr(resp, "usage", None)
+                tracker.record_call(
+                    model=model,
+                    prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                    completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                )
+                breaker.record_success()
                 return self._validate_or_fallback(raw, schema)
 
             except Exception as e:
@@ -184,6 +219,11 @@ class OpenRouterClient:
                     rf = {"type": "json_object"}
                     messages = self._inject_schema_hint(messages, schema)
                     continue
+                # LOGIC: hard failures (auth, quota, persistent bad request)
+                # trip the breaker so the next 4 specialist agents fail fast
+                # instead of each independently retrying for 30 seconds.
+                if type(e).__name__ in _HARD_FAILURES:
+                    breaker.record_failure(type(e).__name__)
                 raise
 
         assert last_exc is not None

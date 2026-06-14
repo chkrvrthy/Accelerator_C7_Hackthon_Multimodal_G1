@@ -57,6 +57,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
+from src.agents.quality_gate import (
+    check_design_report,
+    format_issues_for_prompt,
+)
 from src.schemas.outputs import DesignReport, GraphState
 from src.utils.logger import get_logger
 from src.utils.prompts import synthesizer_system
@@ -92,7 +96,11 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
     failed = [k for k, v in parts.items() if v is None]
     status_block = ""
     if state.analysis_status:
-        status_block = f"\n<analysis_status>{json.dumps(state.analysis_status)}</analysis_status>"
+        status_block = (
+            "\n<analysis_status>"
+            f"{json.dumps(state.analysis_status, separators=(',', ':'))}"
+            "</analysis_status>"
+        )
     if failed:
         log.warning(
             "synthesizer: %d/%d specialists missing (%s) — emitting degraded report.",
@@ -100,16 +108,24 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
             len(parts),
             ", ".join(failed),
         )
+    # COST DISCIPLINE: compact JSON (no whitespace) for the <inputs> block.
+    # The synthesizer is text-only and the 5 specialist outputs total ~2 kB
+    # of structured data; pretty-printing wastes ~30 % of those tokens on
+    # whitespace the model does not need. Compact form is identical
+    # information at lower cost. Saves ~500 tokens per synthesizer call.
     user_text = (
         "Synthesize a DesignReport from these specialist outputs.\n"
-        f"<inputs>{json.dumps(parts, indent=2)}</inputs>"
+        f"<inputs>{json.dumps(parts, separators=(',', ':'))}</inputs>"
         f"{status_block}\n"
         "<task>\n"
-        "  1. Score 0-100 with score_rationale (40-80 words explaining WHY).\n"
-        "  2. score_breakdown for each of the 5 axes.\n"
-        "  3. 3 distinguishing strengths (specific elements only).\n"
-        "  4. 3-5 ranked top_recommendations with priority 1..N, effort,\n"
-        "     impact, metric_lift, and proof citation.\n"
+        " 1. executive_summary (60-100 word narrative paragraph): headline"
+        " finding, single biggest opportunity, action to ship first.\n"
+        " 2. Score 0-100 with score_rationale (40-80 words, ends with the"
+        " 'fixing rec #1 raises overall by ~X' sentence).\n"
+        " 3. score_breakdown for each of the 5 axes.\n"
+        " 4. 3 distinguishing strengths (specific elements only).\n"
+        " 5. 3-5 ranked top_recommendations with priority 1..N, effort,"
+        " impact, metric_lift, and proof citation.\n"
         "</task>"
     )
 
@@ -122,6 +138,50 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
         deps=deps,
     )
     assert isinstance(report, DesignReport)
+
+    # AGENT RETRY LOOP (max 1 corrective re-prompt).
+    # If the first synthesizer output is placeholder-thin (executive_summary
+    # too short, no recommendations, missing breakdown), we re-prompt ONCE
+    # with the specific failures appended to the user message. This is a
+    # bounded budget by design: at most 2x the synthesizer cost, never more.
+    # Skipped automatically when the cost-conscious mode flag is set.
+    fail_issues = [i for i in check_design_report(report) if i.severity == "fail"]
+    if fail_issues and not _cfg.settings.cache_disabled:
+        # LOGIC: only retry on `fail` severity — `warn` / `info` are not
+        # worth a second LLM call. We also skip when CACHE_DISABLED is on
+        # because that mode is the dev/CI path where we want repeatable
+        # token-free runs, not aggressive quality gating.
+        feedback = format_issues_for_prompt(fail_issues)
+        log.info(
+            "synthesizer: corrective re-prompt (%d fail-level issues): %s",
+            len(fail_issues),
+            ", ".join(i.field for i in fail_issues),
+        )
+        retry_user = (
+            user_text
+            + "\n\n<corrective_feedback>"
+            + feedback
+            + "\nReturn the COMPLETE DesignReport JSON again with the fixes."
+            + "</corrective_feedback>"
+        )
+        retry_report = run_with_schema(
+            agent_name="agent.synthesizer.retry",
+            system=synthesizer_system(),
+            user=retry_user,
+            images=[],
+            schema=DesignReport,
+            deps=deps,
+        )
+        assert isinstance(retry_report, DesignReport)
+        # LOGIC: keep whichever attempt has fewer fail issues. If the
+        # retry made things WORSE (rare but possible), we keep the
+        # original — otherwise we'd silently regress quality.
+        if len([i for i in check_design_report(retry_report) if i.severity == "fail"]) < len(
+            fail_issues
+        ):
+            report = retry_report
+        else:
+            log.warning("synthesizer: retry did not reduce fail-issues; keeping first attempt")
 
     # LOGIC: stamp runtime metadata on the LLM output. We own these fields,
     # not the model — they are facts about the run, not about the design.
@@ -152,6 +212,20 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
     out_path = _cfg.settings.report_dir / f"design_report_{report.run_id}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.model_dump_json(indent=2))
+
+    # LOGIC: run the cheap (zero-LLM) quality gate. We log the issues
+    # but do NOT block. The UI surfaces them as a banner so reviewers
+    # know the report needs an extra eye. The agent retry loop (next
+    # patch) uses the same issues to drive a single corrective re-prompt.
+    issues = check_design_report(report)
+    if issues:
+        log.warning(
+            "synthesizer: quality gate flagged %d issue(s) on %s: %s",
+            len(issues),
+            out_path.name,
+            "; ".join(f"{i.field}({i.severity})" for i in issues),
+        )
+
     log.info(
         "synthesizer: wrote %s (score=%.1f, recs=%d, status=%s)",
         out_path.name,

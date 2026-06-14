@@ -20,6 +20,7 @@ Tip for the team:
 
 from __future__ import annotations
 
+from functools import lru_cache
 from textwrap import dedent
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,13 @@ if TYPE_CHECKING:  # pragma: no cover
     from src.schemas.outputs import GraphState, RetrievedRef
 
 from src.schemas.outputs import GraphState
+
+# Cost discipline note:
+# All system-prompt builders below are memoized via lru_cache. Same input
+# (no input) → same string, returned in O(1) without rebuilding the dedent
+# blocks on every agent call. The strings live for the process lifetime,
+# which is cheap (~10 KB total across all 6 prompts) and avoids any
+# allocation surprise during the demo.
 
 # --------------------------------------------------------------------------- #
 # Shared scaffolding                                                          #
@@ -72,7 +80,56 @@ SELF_CHECK_RULE = dedent(
     """
 )
 
+# Token-budget discipline:
+#   The 5 specialist agents emit STRUCTURED JSON that flows into the
+#   synthesizer; their prose only surfaces inside the LLM-to-LLM hop and
+#   in collapsed "details" sections of the UI. They get TONE_HINT (~25
+#   tokens) — just enough to keep voice off "robotic-listicle".
+#   The synthesizer is the only agent that writes user-visible narrative
+#   (executive_summary, score_rationale, recommendation rationales). It
+#   gets the full TONE_RULE + AUDIENCE_RULE — that is the prose the user
+#   actually reads, so the cost is justified.
+#
+# We are deliberately NOT applying ~300 tokens of tone scaffolding to
+# every specialist on every call. At 5 specialists * N runs * any cache
+# miss that would burn real money for no perceivable quality lift.
 
+TONE_HINT = (
+    "Voice: senior peer review. Active voice. No hedges. No emoji. "
+    "No marketing adjectives. Lead with the finding."
+)
+
+TONE_RULE = dedent(
+    """\
+    TONE & VOICE (mandatory; hard constraints):
+    - Write like a senior peer reviewing a colleague's work — not a robot
+      enumerating defects, not a marketing site, not a help-desk ticket.
+    - Confident and specific. Hedges ("might", "could possibly", "seems
+      to", "appears to") are forbidden. Either ground the claim in
+      evidence or omit it.
+    - Direct, not curt. "Secondary CTA fails AA contrast at 3.2:1; raising
+      it to 4.5:1 unblocks the keyboard-only audience." NOT "Contrast issue."
+    - Active voice. "The hierarchy buries the primary action" — not
+      "The primary action is buried by the hierarchy".
+    - No emoji, no exclamation marks, no marketing adjectives
+      ("amazing", "beautiful", "stunning") unless a rubric anchor uses them.
+    - Use second person sparingly ("your screen", "your users") so the
+      report reads as addressed to a real team, not produced for nobody.
+    """
+)
+
+AUDIENCE_RULE = dedent(
+    """\
+    AUDIENCE & PURPOSE:
+    - Reader is a working product team (designer, engineer, PM) with 5
+      minutes who will paste this into a ticket.
+    - Lead with the finding. No methodology preamble. No throat-clearing.
+    - Write so the team does not have to rewrite you.
+    """
+)
+
+
+@lru_cache(maxsize=1)
 def visual_analysis_system() -> str:
     """System prompt for the Visual Analysis agent.
 
@@ -135,6 +192,7 @@ def visual_analysis_system() -> str:
           Good: "Primary button uses #635BFF on white, ~64 px height, 32 px
                  horizontal padding."
 
+        {TONE_HINT}
         {EVIDENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
@@ -165,6 +223,7 @@ def visual_analysis_user(state: GraphState) -> str:
     )
 
 
+@lru_cache(maxsize=1)
 def ux_critique_system() -> str:
     """System prompt for the UX Critique agent.
 
@@ -236,6 +295,7 @@ def ux_critique_system() -> str:
         - 65-80: dense product (Jira ticket view, Salesforce list).
         - 85-100: Bloomberg terminal-class density.
 
+        {TONE_HINT}
         {EVIDENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
@@ -265,6 +325,7 @@ def ux_critique_user(state: GraphState) -> str:
     )
 
 
+@lru_cache(maxsize=1)
 def market_research_system() -> str:
     """System prompt for the Market Research agent.
 
@@ -320,6 +381,7 @@ def market_research_system() -> str:
         - DO NOT cite Wikipedia or generic blog posts as competitor URLs;
           prefer the competitor's own domain when both appear.
 
+        {TONE_HINT}
         {EVIDENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
@@ -327,6 +389,7 @@ def market_research_system() -> str:
     )
 
 
+@lru_cache(maxsize=1)
 def accessibility_system() -> str:
     """System prompt for the Accessibility agent.
 
@@ -388,6 +451,7 @@ def accessibility_system() -> str:
         - est_min_touch_target_px: integer height of the smallest tappable
           control. Null for desktop-only screens with no touch surface.
 
+        {TONE_HINT}
         {EVIDENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
@@ -415,6 +479,7 @@ def accessibility_user(state: GraphState) -> str:
     )
 
 
+@lru_cache(maxsize=1)
 def brand_consistency_system() -> str:
     """System prompt for the Brand Consistency agent.
 
@@ -479,6 +544,7 @@ def brand_consistency_system() -> str:
         - Do NOT compare to the candidate's own internal consistency. That
           is the visual agent's job. You are comparing CANDIDATE vs REFERENCES.
 
+        {TONE_HINT}
         {EVIDENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
@@ -520,6 +586,7 @@ def brand_consistency_user(refs: list[RetrievedRef]) -> str:
     )
 
 
+@lru_cache(maxsize=1)
 def synthesizer_system() -> str:
     """System prompt for the Synthesizer.
 
@@ -588,6 +655,23 @@ def synthesizer_system() -> str:
            overall_score landed where it did. Reference the breakdown values
            and the single biggest drag. End with: "Fixing recommendation #1
            alone would raise the overall by ~X points."
+        8. EXECUTIVE SUMMARY: a 60-100 word narrative paragraph that opens
+           the report. Structured as three beats:
+             (i)   the headline observation (what this screen does well or
+                   gets wrong at one glance),
+             (ii)  the single biggest opportunity (NAME the recommendation,
+                   not just the area),
+             (iii) the action to ship first (imperative; one sentence).
+           Read like a senior designer's memo, not a robot's checklist.
+           NEVER repeat the score number — that lives in score_rationale.
+           Example tone:
+             "The primary action is doing its job — purple is reserved for
+              one button, and the typographic scale stays disciplined under
+              dense data. The drag on the score is a single failing contrast
+              pair on the secondary CTA: it fails WCAG AA at 3.2:1 and is
+              the same element the UX agent flagged as low-affordance.
+              Ship a contrast fix this sprint and the screen reads as
+              production-ready."
 
         FIELD RULES per Recommendation
         - priority: integer 1..N. Unique within the report. 1 is highest.
@@ -624,6 +708,9 @@ def synthesizer_system() -> str:
           access to the screenshot, only their reports.
         - Do NOT score 75 without justification; pick from the rubric.
         - Do NOT emit `score_rationale` shorter than 40 words.
+        - Do NOT emit `executive_summary` shorter than 60 words.
+        - Do NOT open `executive_summary` with throat-clearing
+          ("In this analysis we will examine..."). Lead with the finding.
         - Do NOT skip `priority`, `proof`, or `score_breakdown`.
 
         DEGRADED INPUTS
@@ -636,6 +723,8 @@ def synthesizer_system() -> str:
              provisional.").
           - Still produce 3+ recommendations from the available agents.
 
+        {TONE_RULE}
+        {AUDIENCE_RULE}
         {SELF_CHECK_RULE}
         {JSON_OUTPUT_RULE}
         """

@@ -683,6 +683,88 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* --- quality-gate banner (review-needed stripe) ------------------- */
+.quality-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: linear-gradient(135deg, #fff8e1 0%, #fde9c0 100%);
+  border: 1px solid #d8b25a;
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.quality-banner-icon {
+  font-size: 18px;
+  font-weight: 900;
+  color: #6a4e0a !important;
+  -webkit-text-fill-color: #6a4e0a !important;
+  background: #fff;
+  border-radius: 8px;
+  padding: 2px 10px;
+  border: 1px solid #d8b25a;
+}
+
+.quality-banner-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6a4e0a !important;
+  -webkit-text-fill-color: #6a4e0a !important;
+  margin-bottom: 4px;
+}
+
+.quality-banner p {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #44320a !important;
+  -webkit-text-fill-color: #44320a !important;
+}
+
+.quality-banner ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.quality-banner li {
+  font-size: 12.5px;
+  color: #44320a !important;
+  -webkit-text-fill-color: #44320a !important;
+  margin-bottom: 2px;
+}
+
+/* --- executive summary (the senior-designer memo at the top) ------ */
+.exec-summary {
+  border-left: 3px solid var(--teal);
+  background: linear-gradient(90deg, #f5fbf8 0%, #ffffff 60%);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 18px 22px;
+  margin: 6px 0 22px;
+}
+
+.exec-summary-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
+  margin-bottom: 8px;
+}
+
+.exec-summary p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  font-weight: 450;
+}
+
 /* --- premium report hero ------------------------------------------- */
 .report-hero {
   display: grid;
@@ -1335,6 +1417,117 @@ def _local_reference_file_count() -> int:
     return sum(1 for p in cfg.reference_dir.rglob("*") if p.suffix.lower() in exts)
 
 
+def _cache_file_count() -> int:
+    """Number of disk-cached LLM responses. Useful for the Settings tab."""
+    cfg = _fresh_settings()
+    if not cfg.cache_dir.exists():
+        return 0
+    return sum(1 for _ in cfg.cache_dir.glob("*.json"))
+
+
+def _tool_registry_html() -> str:
+    """Render the agent-tool registry as a Settings-tab card.
+
+    Reads from ``src.agents.tools._REGISTRY`` (via the public
+    ``list_tools`` helper). Static — does not need a refresh button.
+    """
+    from src.agents.tools import list_tools
+
+    tools = list_tools()
+    if not tools:
+        return (
+            '<div class="settings-card" style="margin-top:14px">'
+            "<h3>Agent tools</h3>"
+            "<p><i>No tools registered.</i></p></div>"
+        )
+
+    by_owner: dict[str, list[Any]] = {}
+    for t in tools:
+        by_owner.setdefault(t.owner_agent, []).append(t)
+
+    sections = []
+    for owner in sorted(by_owner):
+        rows = "".join(
+            f"<tr><td><code>{html.escape(t.name)}</code></td>"
+            f"<td>{html.escape(t.description)}</td></tr>"
+            for t in sorted(by_owner[owner], key=lambda t: t.name)
+        )
+        sections.append(
+            f"<h4 style='margin:14px 0 6px'>{html.escape(owner.title())} agent</h4>"
+            "<table style='width:100%;border-collapse:collapse'>"
+            "<tr style='text-align:left'><th>Tool</th><th>Purpose</th></tr>"
+            f"{rows}"
+            "</table>"
+        )
+    return (
+        '<div class="settings-card" style="margin-top:14px">'
+        "<h3>Agent tools (deterministic pre-tools)</h3>"
+        "<p>Each agent runs zero or more measurement tools BEFORE the LLM. "
+        "These pre-tools ground the model in pixel facts and reduce the "
+        "tokens the LLM has to spend speculating about colors, sizes, "
+        "and metrics.</p>" + "".join(sections) + "</div>"
+    )
+
+
+def _cost_telemetry_html() -> str:
+    """Render the cost-tracker snapshot as a Settings-tab card.
+
+    Shows the LAST run's tokens + estimated USD + cache hits, plus the
+    circuit-breaker state. Read-only — clicking "Refresh" regenerates
+    the HTML, never reaches the API.
+    """
+    from src.llm.cost_tracker import get_circuit_breaker, get_cost_tracker
+
+    s = get_cost_tracker().snapshot()
+    b = get_circuit_breaker("openrouter").state()
+
+    by_model_rows = ""
+    for model, row in s["by_model"].items():
+        by_model_rows += (
+            f"<tr><td><code>{html.escape(model)}</code></td>"
+            f"<td>{row['calls']}</td>"
+            f"<td>{row['tokens']:,}</td>"
+            f"<td>${row['usd']:.4f}</td></tr>"
+        )
+    if not by_model_rows:
+        by_model_rows = "<tr><td colspan='4'><i>No LLM calls yet this session.</i></td></tr>"
+
+    breaker_class = "ok" if b["state"] == "closed" else "fail"
+    breaker_msg = (
+        "Closed (normal traffic)"
+        if b["state"] == "closed"
+        else (
+            f"OPEN — fast-failing for ~{b['remaining_s']:.0f}s "
+            f"({b['fails']}/{b['threshold']} failures, "
+            f"last={html.escape(b['last_reason'] or 'unknown')})"
+        )
+    )
+
+    return (
+        '<div class="settings-card" style="margin-top:14px">'
+        "<h3>Cost &amp; resilience telemetry</h3>"
+        "<p><b>This run</b></p>"
+        "<ul>"
+        f"<li>LLM calls: {s['calls']} &nbsp;·&nbsp; "
+        f"cache hits: {s['cache_hits']} &nbsp;·&nbsp; "
+        f"misses: {s['cache_misses']}</li>"
+        f"<li>Tokens used: {s['total_tokens']:,} "
+        f"(prompt {s['prompt_tokens']:,} / completion {s['completion_tokens']:,})</li>"
+        f"<li>Estimated cost: <b>${s['estimated_usd']:.4f}</b></li>"
+        "</ul>"
+        '<table style="width:100%;border-collapse:collapse;margin-top:8px">'
+        '<tr style="text-align:left">'
+        "<th>Model</th><th>Calls</th><th>Tokens</th><th>Est. USD</th></tr>"
+        f"{by_model_rows}"
+        "</table>"
+        f'<p style="margin-top:14px"><b>Circuit breaker</b>: '
+        f'<span class="status-cell {breaker_class}" '
+        'style="display:inline-flex;padding:4px 10px;border-radius:6px;font-size:12px">'
+        f"{html.escape(breaker_msg)}</span></p>"
+        "</div>"
+    )
+
+
 def _format_web_references(query: str, use_real: bool) -> str:
     if not use_real:
         return """
@@ -1421,6 +1614,13 @@ def on_run(
     deps: AgentDeps = build_default_deps(use_real=use_real)
     mode_label = "real APIs (.env)" if use_real else "offline fakes"
 
+    # COST DISCIPLINE: reset the per-run cost ledger so the Settings tab
+    # shows what THIS run cost (not the cumulative session). The tracker
+    # itself is process-wide; the reset is a hard boundary.
+    from src.llm.cost_tracker import get_cost_tracker
+
+    get_cost_tracker().reset()
+
     yield (
         _status_message(
             "Analysis running",
@@ -1431,11 +1631,18 @@ def on_run(
     )
     report: DesignReport = run_graph(image_path, instructions=instructions or None, deps=deps)
     report_dict = report.model_dump()
+
+    # Surface a one-line cost summary in the success status — the user
+    # sees the numbers without having to switch to Settings.
+    cost = get_cost_tracker().snapshot()
+    detail = (
+        f"Score: {report.overall_score:.1f}/100. "
+        f"Tokens used: {cost['total_tokens']:,} "
+        f"(~${cost['estimated_usd']:.4f}); cache hits: {cost['cache_hits']}. "
+        "Open Report."
+    )
     yield (
-        _status_message(
-            "Report ready",
-            f"Score: {report.overall_score:.1f}/100. Open Report.",
-        ),
+        _status_message("Report ready", detail),
         report_dict,
         report_dict,
     )
@@ -1612,8 +1819,42 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
         "brand, market. Recommendations are ranked by impact-over-effort and "
         "cite the agent finding that produced them."
         "</p>",
-        hero,
     ]
+
+    # Quality-gate banner: a yellow stripe when the report contains
+    # placeholder-thin fields. Pure-Python check — no extra LLM calls.
+    from src.agents.quality_gate import check_design_report
+
+    issues = check_design_report(report)
+    fails = [i for i in issues if i.severity == "fail"]
+    warns = [i for i in issues if i.severity == "warn"]
+    if fails or warns:
+        bullets = "".join(
+            f"<li><b>{e(i.field)}</b> — {e(i.reason)}</li>" for i in (fails + warns)[:5]
+        )
+        parts.append(
+            '<div class="quality-banner">'
+            '<span class="quality-banner-icon">!</span>'
+            "<div>"
+            '<div class="quality-banner-title">Review needed</div>'
+            f"<p>{len(fails)} blocking issue(s) and {len(warns)} warning(s) "
+            "in this report. The synthesizer output is below the quality bar; "
+            "the numbers are provisional and the agent retry loop will "
+            "re-prompt on the next run.</p>"
+            f"<ul>{bullets}</ul>"
+            "</div>"
+            "</div>"
+        )
+
+    if report.executive_summary:
+        parts.append(
+            '<div class="exec-summary">'
+            '<div class="exec-summary-label">Executive summary</div>'
+            f"<p>{e(report.executive_summary)}</p>"
+            "</div>"
+        )
+
+    parts.append(hero)
 
     # --- per-axis breakdown bars ------------------------------------- #
     if report.score_breakdown or any(
@@ -1824,6 +2065,17 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
     )
 
     web_refs = _format_web_references(query, use_real=True)
+
+    # FALLBACK: editorial references (hand-curated, no network, no LLM).
+    # Shown ONLY when both gallery_items and web_refs are empty so we
+    # never overwhelm a fully-functional run with the static list.
+    editorial_block = ""
+    has_web_results = "<li>" in web_refs and "(none yet" not in web_refs.lower()
+    if not gallery_items and not has_web_results:
+        from src.rag.editorial_refs import render_as_html, search_editorial
+
+        editorial_block = render_as_html(search_editorial(query, limit=6))
+
     return (
         gallery_items,
         f"""
@@ -1832,6 +2084,7 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
   <p>{html.escape(status)}</p>
 </div>
 {web_refs}
+{editorial_block}
 """,
     )
 
@@ -2038,13 +2291,30 @@ Upload a screenshot. Add context if useful.
   <h3>Runtime settings</h3>
   <p><b>Real API key loaded</b>: {_has_openrouter_key()}</p>
   <p><b>USE_REAL in .env</b>: {cfg.use_real}</p>
+  <p><b>Default text model</b>: <code>{html.escape(cfg.default_text_model)}</code></p>
+  <p><b>Default vision model</b>: <code>{html.escape(cfg.default_vision_model)}</code></p>
+  <p><b>Default temperature</b>: {cfg.default_temperature}</p>
+  <p><b>Max tokens (per call)</b>: {cfg.default_max_tokens:,}</p>
+  <p><b>Cache</b>: {"DISABLED" if cfg.cache_disabled else "enabled"}
+     ({_cache_file_count()} cached responses on disk)</p>
   <p><b>Tavily key loaded</b>: {bool(cfg.tavily_api_key)}</p>
   <p><b>Local reference images</b>: {_local_reference_file_count()}</p>
   <p><b>Indexed reference rows</b>: {_vector_row_count()}</p>
-  <p><b>Reports</b>: {cfg.report_dir}</p>
+  <p><b>Reports</b>: <code>{cfg.report_dir}</code></p>
 </div>
 """
                 )
+
+                # Live cost telemetry — refreshes when the user clicks
+                # the button. We don't auto-poll because that itself
+                # would burn a tiny bit of CPU; one explicit click is
+                # enough for a hackathon demo.
+                cost_view = gr.HTML(_cost_telemetry_html())
+                refresh_btn = gr.Button("Refresh telemetry", variant="secondary")
+                refresh_btn.click(fn=_cost_telemetry_html, outputs=[cost_view])
+
+                # Tool registry — auditable list of all per-agent tools.
+                gr.HTML(_tool_registry_html())
 
     demo.queue().launch(
         server_name="127.0.0.1",

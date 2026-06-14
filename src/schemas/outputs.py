@@ -252,6 +252,15 @@ class DesignReport(BaseModel):
     """
 
     # --- executive header ---------------------------------------------- #
+    executive_summary: str = Field(
+        default="",
+        description=(
+            "60-100 word narrative paragraph that opens the report. Reads "
+            "like a senior designer's memo: the headline finding, the "
+            "single biggest opportunity, and the one action to ship first. "
+            "This is the prose the user will paste into a ticket."
+        ),
+    )
     overall_score: Score = Field(default=0.0)
     score_rationale: str = Field(
         default="",

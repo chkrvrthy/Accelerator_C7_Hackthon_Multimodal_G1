@@ -1,3 +1,16 @@
+---
+title: Multimodal AI Design Analysis Suite
+emoji: ⚡
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: "6.18.0"
+app_file: app.py
+pinned: false
+license: mit
+short_description: Multi-agent design review with image RAG and OpenRouter.
+---
+
 # Multimodal AI Design Analysis Suite
 
 > A multi-agent LangGraph system that reviews uploaded UI/product designs.
@@ -180,14 +193,14 @@ to file paths. Every Sprint 1-6 has a real artifact the judges can point at.
 
 | Target | Verdict | Notes |
 |---|---|---|
-| Hugging Face Spaces (Gradio SDK) | **Recommended** | Free CPU tier; LanceDB via paid Persistent Storage ($5/mo) or re-ingest from a HF Dataset on boot |
+| Hugging Face Spaces (Gradio SDK) | **Recommended** — see `docs/DEPLOY_HF.md` | Free CPU tier; YAML metadata at the top of this README is HF-ready |
 | Render / Fly.io | Works fine | Long-running container + persistent disk |
 | Vercel | Not recommended | Serverless 60 s timeout, no persistent disk; would require rewriting Gradio as Next.js |
 | Local laptop | Hackathon demo target | Zero cost |
 
-Cost-conscious budget for one full demo run with real APIs: **≈ $0.03**
-(~5 vision LLM calls + 1 synth + 5 Tavily queries). With cache, repeats
-are free. Full breakdown in `docs/FAQ.md` § 4.
+Cost-conscious budget for one full demo run with real APIs:
+**≈ $0.0035** at the default `gpt-4o-mini` model; cache turns repeats
+into free runs. Full breakdown in `docs/COST_DISCIPLINE.md`.
 
 ## What we did NOT build (honest list)
 

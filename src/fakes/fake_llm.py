@@ -150,6 +150,16 @@ def _canned(schema: type[BaseModel], seed: str = "") -> dict[str, Any]:
         }
         return {
             "overall_score": overall,
+            "executive_summary": (
+                "The primary action is doing its job: a single brand colour "
+                "is reserved for one button, and the typographic scale "
+                "stays disciplined under dense data. The drag on the score "
+                "is a single failing contrast pair on the secondary CTA — "
+                "the same element the UX agent flagged as low-affordance — "
+                "which makes one of the two above-the-fold actions read as "
+                "tertiary. Ship a contrast fix on the secondary CTA this "
+                "sprint and the screen reads as production-ready."
+            ),
             "score_rationale": (
                 f"Overall {overall:.0f} reflects a polished visual layer "
                 f"({breakdown['visual']:.0f}) carrying a softer UX surface "
