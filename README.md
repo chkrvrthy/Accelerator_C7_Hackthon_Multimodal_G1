@@ -105,7 +105,7 @@ has a one-page section in `docs/ARCHITECTURE.md`.
 
 ## Quickstart
 
-### Run the offline path first (no keys, no network, no GPU)
+### 1. Install (one-time)
 
 **Linux / macOS:**
 
@@ -113,8 +113,7 @@ has a one-page section in `docs/ARCHITECTURE.md`.
 git clone <this-repo-url> ai_c7_hackathon && cd ai_c7_hackathon
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]" -r requirements/all.txt
-make test                        # 56 tests, ~8 seconds
-make run-a                       # full graph against the bundled sample, all fakes
+make test                        # 56 tests, ~8 seconds — confirms the install
 ```
 
 **Windows (PowerShell):**
@@ -123,37 +122,73 @@ make run-a                       # full graph against the bundled sample, all fa
 git clone <this-repo-url> ai_c7_hackathon ; cd ai_c7_hackathon
 python -m venv .venv ; .venv\Scripts\Activate.ps1
 pip install -e ".[dev]" -r requirements/all.txt
-# `make` is not native on Windows. Either install GnuWin32 / Chocolatey
-# `choco install make` (recommended), or run the equivalent commands directly:
-pytest -q                                   # equivalent to `make test`
-python -m src.agents.graph --image src/fakes/fixtures/sample.png  # equivalent to `make run-a`
+pytest -q                        # equivalent to `make test`
 ```
 
-> Every Makefile target maps to a one-line `python -m ...` command. Open
-> the `Makefile` (it's short, ~50 lines) to see the equivalent if you'd
-> rather not install `make`.
+> `make` is not native on Windows. Either install it
+> (`choco install make` recommended) and use the `make` targets, or run
+> the underlying `python -m ...` commands directly. Every Makefile target
+> is one line — open the `Makefile` to see the literal commands.
 
-### Switch on real APIs
+### 2. Launch the app — four equivalent commands
 
-1. **Get an OpenRouter key** at https://openrouter.ai/keys (sign in → "Create
-   Key"). Add $5 of credits — that lasts the entire hackathon.
-2. (Optional) **Tavily** at https://app.tavily.com/home for nicer market-
-   research snippets — 1,000 queries/month free. Skip it and the code falls
-   back to free DuckDuckGo automatically.
-3. (Optional) **LangSmith** at https://smith.langchain.com/settings →
-   "API Keys" for traces — 5,000 traces/month free.
-
-**Copy the env template:**
+The Gradio app is the same in all four; pick whichever fits your workflow.
 
 ```bash
-# Linux / macOS:
-cp .env.example .env
-
-# Windows (PowerShell):
-Copy-Item .env.example .env
+make ui                  # runs python ui/app.py — recommended on Linux/macOS
+python ui/app.py         # direct execution — works on every OS
+python -m ui.app         # module-style — handy when ui/ is on PYTHONPATH
+python app.py            # the HF Spaces shim (a 4-line wrapper around ui.app:main)
 ```
 
-Open `.env` in your editor and edit at minimum:
+All four open the UI on **<http://127.0.0.1:7860>**. The first launch can
+take ~15 s while Gradio boots; subsequent launches are instant.
+
+### 3. First-time analysis — what to upload
+
+The Analyze tab takes **one design screenshot at a time** (PNG / JPG / WebP,
+up to 20 MB; oversized files are auto-resized to 1024 px on the long edge
+before any model call). The output is one prioritized `DesignReport`. To
+review a second design, just upload the next screenshot and click Run again.
+
+> **Why one screenshot?** Each "Run" is a single end-to-end multi-agent
+> review with cost telemetry. Pinning each report to one input keeps the
+> UI deterministic and the cost ledger honest. If you want batch review
+> over a folder, see [`scripts/run_evals.py`](scripts/run_evals.py).
+
+### 4. Multiple reference images — the brand-RAG corpus
+
+The brand-consistency agent is the only specialist that needs multiple
+images, and they go into the **reference corpus** (NOT the Analyze upload).
+You build the corpus once, then every "Run" retrieves the closest matches
+against the single uploaded screenshot.
+
+```bash
+# 1. Drop ANY number of reference designs into data/reference/
+cp my_brand_screens/*.png data/reference/
+
+# 2. Index them — CLIP embeddings are written to LanceDB
+make ingest                                          # = python -m scripts.ingest_references --source ./data/reference
+
+# 3. Confirm the count from the Settings tab — "Local reference images"
+#    and "Indexed reference rows" should both reflect the new total.
+```
+
+The bundled corpus is empty by default; tests use the in-memory `FakeRetriever`.
+For a serious demo, ingest 10–30 reference screens.
+
+### 5. Switch on real APIs
+
+1. **Get an OpenRouter key** at <https://openrouter.ai/keys> (sign in → "Create
+   Key"). Add $5 of credits — that lasts the entire hackathon.
+2. (Optional) **Tavily** at <https://app.tavily.com/home> for nicer
+   market-research snippets — 1,000 queries/month free. Skip it and the code
+   falls back to DuckDuckGo automatically.
+3. (Optional) **LangSmith** at <https://smith.langchain.com/settings> →
+   "API Keys" for traces — 5,000 traces/month free.
+
+**Copy the env template** (Linux/macOS: `cp .env.example .env`;
+Windows: `Copy-Item .env.example .env`) and edit at minimum:
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-...
@@ -170,22 +205,12 @@ python -c "from src.config import settings; print('OR key set:', bool(settings.o
 # Expect:  OR key set: True
 ```
 
-**Run end-to-end:**
-
-```bash
-# Linux / macOS:
-make ingest                                        # build the LanceDB corpus from data/reference/*.png
-USE_REAL=1 make ui                                 # Gradio at http://127.0.0.1:7860
-
-# Windows (PowerShell):
-python -m scripts.ingest_references --source .\data\reference
-$env:USE_REAL="1" ; python -m ui.app
-```
+Then re-launch the app with the same command from step 2. The Settings tab
+will now show **`Real API key loaded: True`** and **`USE_REAL in .env: True`**.
 
 Per-slice setup (just *your* keys, just *your* deps) is in
 `docs/PERSON_<A|B|C|D|E>.md` — each starts with a "Setup — first 5 minutes"
-block listing exactly which keys you personally need and which you can
-skip.
+block listing exactly which keys you personally need and which you can skip.
 
 ## Per-person quickstart
 
