@@ -53,3 +53,34 @@ def test_a11y_contrast_pass_measured_when_opencv_present(fake_deps, sample_image
     rep = out["accessibility"]
     assert rep.contrast_pass is not None
     assert isinstance(rep.contrast_pass, bool)
+
+
+def test_a11y_contrast_measurement_uses_wcag_relative_luminance(tmp_path):
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        pytest.skip("opencv not installed")
+
+    image = np.zeros((20, 20, 3), dtype=np.uint8)
+    image[:, :10] = (20, 20, 20)
+    image[:, 10:] = (120, 120, 120)
+    path = tmp_path / "low_contrast.png"
+    cv2.imwrite(str(path), image)
+
+    assert accessibility._measure_contrast_pass(str(path)) is False
+
+
+def test_a11y_contrast_measurement_passes_high_contrast_pair(tmp_path):
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        pytest.skip("opencv not installed")
+
+    image = np.zeros((20, 20, 3), dtype=np.uint8)
+    image[:, 10:] = (255, 255, 255)
+    path = tmp_path / "high_contrast.png"
+    cv2.imwrite(str(path), image)
+
+    assert accessibility._measure_contrast_pass(str(path)) is True
