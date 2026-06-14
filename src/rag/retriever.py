@@ -132,6 +132,29 @@ class LanceRetriever:
         return [self._to_ref(r) for r in rows if (1 - r["_distance"]) >= SCORE_FLOOR]
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _resolve_path(image_path: str) -> str:
+        """Resolve a stored (portable, relative) path to an absolute on-disk path.
+
+        Ingest stores paths relative to ``reference_dir.parent`` (e.g.
+        ``reference/foo.png``) for portability. Consumers — the brand agent's
+        vision call, the UI gallery, the MCP tool — need a path that actually
+        opens regardless of the current working directory. Resolve here, once,
+        so no downstream consumer has to. If nothing matches, return the stored
+        value unchanged so behaviour degrades gracefully rather than crashing.
+        """
+        p = Path(image_path)
+        if p.is_absolute() and p.exists():
+            return str(p)
+        for candidate in (
+            p,
+            settings.reference_dir.parent / image_path,
+            settings.reference_dir / image_path,
+        ):
+            if candidate.exists():
+                return str(candidate.resolve())
+        return image_path
+
     def _to_ref(self, row: dict[str, Any]) -> RetrievedRef:
         """Convert a LanceDB hit dict to a ``RetrievedRef``."""
         # HINT: ~5-line dict mapping. The fields all exist by name from the
@@ -148,7 +171,7 @@ class LanceRetriever:
         return RetrievedRef(
             id=row["id"],
             score=float(1.0 - row["_distance"]),
-            image_path=row["image_path"],
+            image_path=self._resolve_path(row["image_path"]),
             metadata={
                 "source": row.get("source", ""),
                 "tags": row.get("tags", []),

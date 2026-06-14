@@ -62,6 +62,54 @@ def test_duckduckgo_search_normalizes_results(monkeypatch, tmp_settings):
     ]
 
 
+def test_get_default_search_prefers_tavily_when_key_is_set(monkeypatch, tmp_settings):
+    from src.tools import web_search
+    from src.tools.web_search import TavilySearch
+
+    cfg = tmp_settings.model_copy(update={"tavily_api_key": "tvly-test"})
+    monkeypatch.setattr(web_search, "settings", cfg)
+
+    assert isinstance(web_search.get_default_search(), TavilySearch)
+
+
+def test_tavily_search_normalizes_results(monkeypatch, tmp_settings):
+    from src.tools import web_search
+    from src.tools.web_search import TavilySearch
+
+    monkeypatch.setattr(web_search, "settings", tmp_settings)
+
+    class FakeTavilyClient:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def search(self, query, max_results, include_answer):
+            return {
+                "results": [
+                    {
+                        "title": "Homepage examples",
+                        "url": "https://example.com/a?utm_source=x&ref=keep",
+                        "content": f"snippet for {query}",
+                    },
+                    {"title": "bad", "url": "mailto:nope", "content": "skip"},
+                ]
+            }
+
+    monkeypatch.setitem(
+        sys.modules,
+        "tavily",
+        types.SimpleNamespace(TavilyClient=FakeTavilyClient),
+    )
+
+    hits = TavilySearch(api_key="tvly-test").search("homepage design", k=5)
+    assert hits == [
+        SearchResult(
+            title="Homepage examples",
+            url="https://example.com/a?ref=keep",
+            snippet="snippet for homepage design",
+        )
+    ]
+
+
 @pytest.mark.real_api
 def test_tavily_search_returns_results():
     pytest.importorskip("tavily")

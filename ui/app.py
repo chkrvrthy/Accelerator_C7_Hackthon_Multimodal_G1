@@ -22,6 +22,8 @@ LAUNCH
 
 from __future__ import annotations
 
+import html
+import os
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -33,7 +35,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.agents.base import AgentDeps, build_default_deps  # noqa: E402
 from src.agents.graph import run_graph  # noqa: E402
-from src.config import settings  # noqa: E402
+import src.config as app_config  # noqa: E402
+from src.config import Settings, settings  # noqa: E402
 from src.schemas.outputs import DesignReport  # noqa: E402
 from src.utils.logger import get_logger  # noqa: E402
 
@@ -49,11 +52,17 @@ APP_CSS = """
   --line: #d9ded8;
   --panel: #ffffff;
   --teal: #0f766e;
+  --teal-dark: #0b5f58;
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
   --coral: #d45d4c;
+  --coral-dark: #a9473a;
   --gold: #b88718;
+  --navy: #223645;
   --green-soft: #e7f4ef;
   --coral-soft: #faece8;
   --gold-soft: #f7efd8;
+  --blue-soft: #e8f0f7;
 }
 
 html,
@@ -135,7 +144,9 @@ body {
 
 .guide-card,
 .result-card,
-.status-card {
+.status-card,
+.settings-card,
+.reference-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -144,19 +155,37 @@ body {
 
 .guide-card h3,
 .result-card h3,
-.status-card h3 {
+.status-card h3,
+.settings-card h3,
+.reference-card h3 {
   margin: 0 0 8px;
   font-size: 17px;
   letter-spacing: 0;
+  color: var(--ink) !important;
 }
 
 .guide-card p,
 .guide-card li,
 .result-card p,
 .result-card li,
-.status-card p {
+.status-card p,
+.settings-card p,
+.settings-card li,
+.reference-card p,
+.reference-card li {
   color: var(--soft-text);
   line-height: 1.5;
+}
+
+.settings-card b,
+.reference-card b {
+  color: var(--ink) !important;
+}
+
+.reference-card a,
+.settings-card a {
+  color: #0b5f99 !important;
+  font-weight: 700;
 }
 
 .steps {
@@ -256,23 +285,150 @@ body {
   color: #0b5f58;
 }
 
+.reference-card {
+  background: #f8fbff;
+  border-color: #c9d9e8;
+}
+
+.settings-card {
+  background: #ffffff;
+  border-color: #c9d9e8;
+  color: var(--ink) !important;
+}
+
+.settings-card,
+.settings-card *,
+.reference-card,
+.reference-card * {
+  color: var(--ink) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.settings-card p,
+.settings-card li,
+.reference-card p,
+.reference-card li,
+.reference-card span {
+  color: var(--soft-text) !important;
+}
+
+.reference-panel,
+.reference-panel .form,
+.reference-panel .block,
+.reference-panel .wrap,
+.reference-panel .input-container,
+.reference-panel .checkbox-container,
+.reference-panel textarea,
+.reference-panel input,
+.reference-gallery,
+.reference-gallery .wrap,
+.reference-gallery .block,
+.reference-gallery .empty,
+.reference-gallery [data-testid="gallery"] {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #b9c8c0 !important;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+.reference-panel label.float,
+.reference-panel .float,
+.reference-panel [data-testid="block-info"],
+.reference-panel .label-wrap,
+.reference-panel .label-wrap *,
+.reference-panel .block-label,
+.reference-panel .block-title,
+.reference-gallery label.float,
+.reference-gallery .float,
+.reference-gallery [data-testid="block-info"],
+.reference-gallery .label-wrap,
+.reference-gallery .label-wrap *,
+.reference-gallery .block-label,
+.reference-gallery .block-title {
+  background: #eef5f1 !important;
+  background-color: #eef5f1 !important;
+  border: 1px solid #bed8cc !important;
+  border-radius: 7px !important;
+  color: #16282b !important;
+  -webkit-text-fill-color: #16282b !important;
+  font-weight: 750 !important;
+}
+
+.reference-panel input[type="checkbox"] {
+  accent-color: var(--blue) !important;
+}
+
+.reference-panel button.primary,
+.reference-panel button.primary *,
+.reference-panel .primary,
+.reference-panel .primary * {
+  background: var(--blue) !important;
+  background-color: var(--blue) !important;
+  border-color: var(--blue-dark) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.report-wrap,
+.report-wrap * {
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
 .report-wrap h2 {
-  margin-top: 0;
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.report-wrap h3 {
+  margin: 22px 0 8px;
+  font-size: 16px;
+}
+
+.report-wrap ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.report-wrap li {
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: var(--soft-text) !important;
+  line-height: 1.55;
+  margin-bottom: 7px;
 }
 
 .report-score {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 8px;
   background: var(--green-soft);
-  color: #165a50;
+  border: 1px solid #bedccd;
   font-weight: 750;
 }
 
+.report-score,
+.report-score * {
+  color: #0b5f58 !important;
+  -webkit-text-fill-color: #0b5f58 !important;
+}
+
 .report-score span {
-  font-size: 28px;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.report-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eef2f7;
+  border: 1px solid #cdd6e0;
+  margin-right: 6px;
 }
 
 .json-holder {
@@ -320,14 +476,33 @@ button.primary,
   color: var(--ink) !important;
 }
 
+.gradio-container button:not([role="tab"]):not(.primary),
+.gradio-container button:not([role="tab"]):not(.primary) span {
+  background: #ffffff !important;
+  border-color: #9db2bf !important;
+  color: #173247 !important;
+  font-weight: 700 !important;
+}
+
+.gradio-container button:not([role="tab"]):not(.primary):hover {
+  background: #e8f1ff !important;
+  border-color: var(--blue) !important;
+}
+
 .gradio-container button.primary,
 .gradio-container button.primary span,
 .gradio-container .gradio-button.primary,
 .gradio-container .gradio-button.primary span {
-  background: #0f766e !important;
-  border-color: #0f766e !important;
+  background: var(--blue) !important;
+  border-color: var(--blue-dark) !important;
   color: #ffffff !important;
   font-weight: 750 !important;
+}
+
+.gradio-container button.primary:hover,
+.gradio-container .gradio-button.primary:hover {
+  background: var(--blue-dark) !important;
+  border-color: #1e40af !important;
 }
 
 .gradio-container button[role="tab"],
@@ -475,8 +650,8 @@ button.primary,
 .gradio-container button.primary *,
 .gradio-container .primary,
 .gradio-container .primary * {
-  background-color: #0f766e !important;
-  border-color: #0f766e !important;
+  background-color: var(--blue) !important;
+  border-color: var(--blue-dark) !important;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
 }
@@ -518,8 +693,124 @@ FORCE_LIGHT_THEME_HEAD = """
 def _status_message(title: str, body: str) -> str:
     return f"""
 <div class="status-card">
-  <h3>{title}</h3>
-  <p>{body}</p>
+  <h3>{html.escape(title)}</h3>
+  <p>{html.escape(body)}</p>
+</div>
+"""
+
+
+def _fresh_settings() -> Settings:
+    """Re-read .env and point UI-adjacent modules at the fresh Settings."""
+    global settings
+
+    app_config.get_settings.cache_clear()
+    settings = app_config.get_settings()
+    app_config.settings = settings
+
+    modules = (
+        "src.agents.base",
+        "src.tools.web_search",
+        "src.llm.openrouter_client",
+        "src.llm.multimodal",
+        "src.rag.retriever",
+        "src.rag.embedder",
+    )
+    for module_name in modules:
+        module = sys.modules.get(module_name)
+        if module is not None:
+            setattr(module, "settings", settings)
+    return settings
+
+
+def _has_openrouter_key() -> bool:
+    cfg = _fresh_settings()
+    return bool(
+        cfg.openrouter_api_key
+        and "REPLACE_ME" not in cfg.openrouter_api_key
+    )
+
+
+def _default_real_mode() -> bool:
+    cfg = _fresh_settings()
+    return cfg.use_real or _has_openrouter_key()
+
+
+def _resolve_reference_path(image_path: str) -> str:
+    """Convert portable retriever paths into browser-readable local paths."""
+    cfg = _fresh_settings()
+    candidates = [
+        Path(image_path),
+        PROJECT_ROOT / image_path,
+        cfg.reference_dir.parent / image_path,
+        cfg.reference_dir / image_path,
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p.resolve())
+    return image_path
+
+
+def _vector_row_count() -> int:
+    try:
+        from src.rag.vector_store import get_or_create_table, open_db
+
+        table = get_or_create_table(open_db(), dim=512)
+        return int(table.count_rows())
+    except Exception as e:
+        log.warning("references: could not count vector rows: %s", e)
+        return 0
+
+
+def _local_reference_file_count() -> int:
+    cfg = _fresh_settings()
+    exts = {".png", ".jpg", ".jpeg", ".webp"}
+    if not cfg.reference_dir.exists():
+        return 0
+    return sum(1 for p in cfg.reference_dir.rglob("*") if p.suffix.lower() in exts)
+
+
+def _format_web_references(query: str, use_real: bool) -> str:
+    if not use_real:
+        return """
+<div class="reference-card">
+  <h3>Web references</h3>
+  <p>Turn on real references for live web results.</p>
+</div>
+"""
+    try:
+        cfg = _fresh_settings()
+        from src.tools.web_search import get_default_search
+
+        provider = "Tavily" if cfg.tavily_api_key else "DuckDuckGo"
+        hits = get_default_search().search(f"{query} UI design examples", k=5)
+    except Exception as e:
+        return f"""
+<div class="reference-card">
+  <h3>Web references</h3>
+  <p>Search failed: {html.escape(str(e))}</p>
+</div>
+"""
+
+    if not hits:
+        return """
+<div class="reference-card">
+  <h3>Web references</h3>
+  <p>No live results. Check TAVILY_API_KEY or network access.</p>
+</div>
+"""
+
+    rows = "\n".join(
+        "<li>"
+        f"<a href=\"{html.escape(hit.url)}\" target=\"_blank\">"
+        f"{html.escape(hit.title)}</a>"
+        f"<br><span>{html.escape(hit.snippet[:180])}</span>"
+        "</li>"
+        for hit in hits
+    )
+    return f"""
+<div class="reference-card">
+  <h3>Web references from {provider}</h3>
+  <ul>{rows}</ul>
 </div>
 """
 
@@ -534,8 +825,7 @@ def on_run(
         yield (
             _status_message(
                 "Upload needed",
-                "Add a PNG or JPG screenshot first. Best inputs are full screens, flows, "
-                "or dashboard views where text and visual hierarchy are readable.",
+                "Add a PNG or JPG screenshot first.",
             ),
             {},
             None,
@@ -543,13 +833,24 @@ def on_run(
         return
 
     image_path = Path(image.name if hasattr(image, "name") else image)
+    _fresh_settings()
+    if use_real and not _has_openrouter_key():
+        yield (
+            _status_message(
+                "Missing API key",
+                "Set OPENROUTER_API_KEY in .env and click Run again.",
+            ),
+            {},
+            None,
+        )
+        return
+
     deps: AgentDeps = build_default_deps(use_real=use_real)
 
     yield (
         _status_message(
             "Analysis running",
-            f"Reviewing {image_path.name}. The agents are checking visual design, UX, "
-            "accessibility, brand consistency, and market context.",
+            f"Reviewing {image_path.name} with {'real APIs' if use_real else 'offline fakes'}.",
         ),
         {},
         None,
@@ -559,54 +860,63 @@ def on_run(
     yield (
         _status_message(
             "Report ready",
-            f"Overall score: {report.overall_score:.1f}/100. Open the Report tab for "
-            "strengths, recommendations, and market notes.",
+            f"Score: {report.overall_score:.1f}/100. Open Report.",
         ),
         report_dict,
         report_dict,
     )
 
 
-def render_report(report: DesignReport | dict[str, Any] | None) -> str:
-    """Format the latest report as Markdown/HTML for Tab 2."""
-    if report is None:
-        return """_No report yet._
+def _ul(items: list[str]) -> str:
+    """Render an escaped HTML list (items may contain pre-escaped markup)."""
+    rows = "".join(f"<li>{item}</li>" for item in items)
+    return f"<ul>{rows}</ul>"
 
+
+def render_report(report: DesignReport | dict[str, Any] | None) -> str:
+    """Format the latest report as a self-contained HTML block for the Report tab."""
+    if report is None:
+        return """
 <div class="result-card">
   <h3>No report yet</h3>
-  <p>Run an analysis from the Analyze tab. The report will appear here with a score,
-  strengths, recommendations, and specialist findings.</p>
+  <p>Run an analysis from the Analyze tab. The score, strengths, recommendations,
+  and specialist findings will appear here.</p>
 </div>
 """
     if isinstance(report, dict):
         report = DesignReport.model_validate(report)
 
-    lines: list[str] = [
+    e = html.escape
+    parts: list[str] = [
         '<div class="report-wrap">',
         "<h2>Design report</h2>",
-        f'<div class="report-score"><span>{report.overall_score:.1f}</span>/100</div>',
+        f'<div class="report-score"><span>{report.overall_score:.1f}</span> / 100</div>',
         "<h3>Top strengths</h3>",
+        _ul([e(s) for s in report.top_strengths] or ["No strengths returned yet."]),
+        "<h3>Prioritized recommendations</h3>",
     ]
-    lines.extend(f"- {s}" for s in report.top_strengths or ["No strengths returned yet."])
-    lines.append("<h3>Prioritized recommendations</h3>")
     if report.top_recommendations:
-        for r in report.top_recommendations:
-            lines.append(
-                f"- **{r.title}**  \n"
-                f"  Effort: `{r.effort}` | Impact: `{r.impact}`  \n"
-                f"  {r.rationale}"
-            )
+        recs = [
+            f"<b>{e(r.title)}</b><br>"
+            f'<span class="report-tag">Effort {e(str(r.effort))}</span>'
+            f'<span class="report-tag">Impact {e(str(r.impact))}</span><br>'
+            f"{e(r.rationale)}"
+            for r in report.top_recommendations
+        ]
+        parts.append(_ul(recs))
     else:
-        lines.append("- No recommendations returned yet.")
+        parts.append(_ul(["No recommendations returned yet."]))
 
     if report.visual:
-        lines.extend(
-            [
-                "<h3>Visual analysis</h3>",
-                f"- Layout: {report.visual.layout or 'Not returned'}",
-                f"- Hierarchy: {report.visual.hierarchy or 'Not returned'}",
-                f"- Density score: {report.visual.density_score:.1f}/100",
-            ]
+        parts.append("<h3>Visual analysis</h3>")
+        parts.append(
+            _ul(
+                [
+                    f"Layout: {e(report.visual.layout or 'Not returned')}",
+                    f"Hierarchy: {e(report.visual.hierarchy or 'Not returned')}",
+                    f"Density score: {report.visual.density_score:.1f}/100",
+                ]
+            )
         )
 
     if report.accessibility:
@@ -615,32 +925,64 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
             if report.accessibility.contrast_pass is True
             else "needs review" if report.accessibility.contrast_pass is False else "not measured"
         )
-        lines.extend(["<h3>Accessibility</h3>", f"- Contrast: {pass_text}"])
+        parts.append("<h3>Accessibility</h3>")
+        parts.append(_ul([f"Contrast: {pass_text}"]))
 
     if report.market:
-        lines.append("<h3>Market signals</h3>")
-        lines.extend(f"- {t}" for t in report.market.trends or ["No trends returned yet."])
+        parts.append("<h3>Market signals</h3>")
+        parts.append(_ul([e(t) for t in report.market.trends] or ["No trends returned yet."]))
 
-    lines.append("</div>")
-    return "\n".join(lines)
+    parts.append("</div>")
+    return "\n".join(parts)
 
 
 def _gallery_query(deps: AgentDeps, query: str, k: int = 12) -> list[tuple[str, str]]:
     """Return Gradio gallery tuples from the configured retriever."""
     refs = deps.retriever.retrieve_by_text(query, k=k)
-    return [(r.image_path, f"{r.id} - {r.score:.2f}") for r in refs]
+    return [(_resolve_reference_path(r.image_path), f"{r.id} - {r.score:.2f}") for r in refs]
 
 
-def _gallery_query_from_ui(query: str, use_real: bool) -> list[tuple[str, str]]:
-    """Build deps from the UI toggle and run a text search."""
+def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
+    """Search local image refs (LanceDB) and live web refs (Tavily/DuckDuckGo)."""
+    _fresh_settings()
     if not query.strip():
-        return []
-    deps = build_default_deps(use_real=use_real)
-    return _gallery_query(deps, query, k=12)
+        return [], """
+<div class="reference-card">
+  <h3>Similar references</h3>
+  <p>Type a pattern or product category.</p>
+</div>
+"""
+
+    gallery_items: list[tuple[str, str]] = []
+    local_files = _local_reference_file_count()
+    vector_rows = _vector_row_count()
+
+    if vector_rows > 0:
+        try:
+            deps = build_default_deps(use_real=True)
+            gallery_items = _gallery_query(deps, query, k=12)
+        except Exception as e:
+            log.warning("references: retriever failed: %s", e)
+
+    status = (
+        f"{vector_rows} indexed references from {local_files} local files."
+        if gallery_items
+        else "No indexed matches yet. Add images to the reference dir and run make ingest."
+    )
+
+    web_refs = _format_web_references(query, use_real=True)
+    return gallery_items, f"""
+<div class="reference-card">
+  <h3>Similar references</h3>
+  <p>{html.escape(status)}</p>
+</div>
+{web_refs}
+"""
 
 
 def main() -> None:
     """Build and launch the Gradio Blocks app."""
+    cfg = _fresh_settings()
     try:
         import gradio as gr  # type: ignore[import-not-found]
     except ImportError as e:
@@ -652,17 +994,15 @@ def main() -> None:
         gr.HTML(
             """
 <section class="hero-band">
-  <h1>Multimodal AI Design Analysis Suite</h1>
+  <h1>Design Analysis Suite</h1>
   <p>
-    Upload a product screenshot and get a structured review from specialist AI agents:
-    visual design, UX, accessibility, brand consistency, and market research. Use it for
-    product screens, dashboards, checkout flows, landing pages, or mobile app concepts.
+    Upload a screen for a fast visual, UX, accessibility, brand, and market review.
   </p>
   <div class="chip-row">
-    <span class="chip">Screenshot review</span>
-    <span class="chip">Multi-agent critique</span>
-    <span class="chip">Market context</span>
-    <span class="chip">JSON report</span>
+    <span class="chip">Visual</span>
+    <span class="chip">UX</span>
+    <span class="chip">Accessibility</span>
+    <span class="chip">Market</span>
   </div>
 </section>
 """
@@ -671,9 +1011,9 @@ def main() -> None:
         gr.HTML(
             """
 <div class="steps">
-  <div class="step accent-teal"><b>1. Upload</b><span>Use a clear PNG or JPG. Full screens work better than tiny crops.</span></div>
-  <div class="step accent-coral"><b>2. Add context</b><span>Tell the agents the audience, brand, market, or goal.</span></div>
-  <div class="step accent-gold"><b>3. Review</b><span>Expect a score, strengths, recommendations, findings, and citations.</span></div>
+  <div class="step accent-teal"><b>1. Upload</b><span>Use a clear PNG or JPG.</span></div>
+  <div class="step accent-coral"><b>2. Add context</b><span>Audience, brand, goal.</span></div>
+  <div class="step accent-gold"><b>3. Review</b><span>Score, fixes, and evidence.</span></div>
 </div>
 """
         )
@@ -686,21 +1026,20 @@ def main() -> None:
                     with gr.Column(scale=3, elem_classes=["upload-panel"]):
                         gr.Markdown(
                             """
-### Start a design review
-Upload one screen or flow image. For best results, avoid blurry exports, heavy cropping,
-or screenshots where important text is unreadable.
+### Analyze a screen
+Upload a screenshot. Add context if useful.
 """
                         )
                         image_in = gr.File(label="Design screenshot", file_types=["image"])
                         instructions_in = gr.Textbox(
-                            label="Context for the agents",
-                            placeholder="Example: audience: India fintech users; brand: premium but approachable; goal: improve onboarding conversion",
-                            lines=4,
+                            label="Context",
+                            placeholder="Audience, brand, market, or goal",
+                            lines=3,
                         )
                         with gr.Row():
                             use_real_in = gr.Checkbox(
-                                value=settings.use_real,
-                                label="Use real APIs",
+                                value=_default_real_mode(),
+                                label="Use real APIs from .env",
                             )
                             run_btn = gr.Button("Run analysis", variant="primary")
                         gr.Examples(
@@ -719,21 +1058,20 @@ or screenshots where important text is unreadable.
                         gr.HTML(
                             """
 <div class="guide-card accent-teal">
-  <h3>What to upload</h3>
+  <h3>Good inputs</h3>
   <ul>
-    <li>Mobile app or web product screenshots</li>
-    <li>Dashboards, checkout flows, onboarding, landing pages</li>
-    <li>PNG or JPG files with readable UI text</li>
+    <li>Readable UI screenshots</li>
+    <li>Dashboards, onboarding, checkout</li>
+    <li>Full screens work best</li>
   </ul>
 </div>
 <br>
 <div class="guide-card accent-coral">
-  <h3>What you will get</h3>
+  <h3>Output</h3>
   <ul>
-    <li>Overall design score</li>
-    <li>Top strengths and prioritized fixes</li>
-    <li>UX, accessibility, brand, and visual findings</li>
-    <li>Market trends and competitor references</li>
+    <li>Score and key strengths</li>
+    <li>Prioritized fixes</li>
+    <li>Evidence and references</li>
   </ul>
 </div>
 """
@@ -742,7 +1080,7 @@ or screenshots where important text is unreadable.
                 log_out = gr.HTML(
                     _status_message(
                         "Ready",
-                        "Upload a design screenshot and add a little context. The offline fake mode is safe for demos; real API mode uses configured keys.",
+                        "Upload a screenshot. Real mode reads .env.",
                     )
                 )
                 with gr.Accordion("Raw structured report", open=False):
@@ -755,67 +1093,70 @@ or screenshots where important text is unreadable.
                 )
 
             with gr.Tab("Report"):
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.HTML(
-                            """
-<div class="guide-card accent-gold">
-  <h3>How to read the report</h3>
-  <p>
-    Start with the score and top recommendations. Then scan specialist sections
-    for evidence you can hand to design, product, engineering, or brand partners.
-  </p>
-</div>
-"""
-                        )
-                        refresh_btn = gr.Button("Refresh report")
-                    with gr.Column(scale=3):
-                        report_md = gr.Markdown(render_report(None))
-                refresh_btn.click(fn=render_report, inputs=[report_state], outputs=[report_md])
-                report_state.change(fn=render_report, inputs=[report_state], outputs=[report_md])
+                report_view = gr.HTML(render_report(None))
+                report_state.change(
+                    fn=render_report, inputs=[report_state], outputs=[report_view]
+                )
 
             with gr.Tab("References"):
                 gr.HTML(
                     """
 <div class="guide-card accent-teal">
-  <h3>Reference search</h3>
-  <p>Search the design corpus for comparable patterns. In fake mode this returns deterministic sample references; real mode uses the configured retriever.</p>
+  <h3>References</h3>
+  <p>Search returns similar indexed designs (LanceDB) plus live web examples (Tavily).</p>
 </div>
 """
                 )
-                with gr.Row():
+                with gr.Row(elem_classes=["reference-panel"]):
                     q = gr.Textbox(
-                        label="Search corpus",
-                        placeholder="e.g. fintech dashboard, onboarding card stack, accessible checkout",
+                        label="Search",
+                        placeholder="fintech dashboard, onboarding, checkout",
                         scale=4,
                     )
-                    gallery_real = gr.Checkbox(
-                        value=settings.use_real,
-                        label="Use real retriever",
-                        scale=1,
-                    )
-                gallery = gr.Gallery(columns=4, height=380, label="Similar references")
+                    ref_btn = gr.Button("Search", variant="primary", scale=1)
+                gallery = gr.Gallery(
+                    columns=4,
+                    height=380,
+                    label="Similar references",
+                    elem_classes=["reference-gallery"],
+                )
+                reference_notes = gr.HTML(
+                    """
+<div class="reference-card">
+  <h3>Similar references</h3>
+  <p>Search for local matches and live web references.</p>
+</div>
+"""
+                )
                 q.submit(
-                    fn=_gallery_query_from_ui,
-                    inputs=[q, gallery_real],
-                    outputs=[gallery],
+                    fn=_reference_query_from_ui,
+                    inputs=[q],
+                    outputs=[gallery, reference_notes],
+                )
+                ref_btn.click(
+                    fn=_reference_query_from_ui,
+                    inputs=[q],
+                    outputs=[gallery, reference_notes],
                 )
 
             with gr.Tab("Settings"):
                 gr.HTML(
                     f"""
-<div class="guide-card accent-gold">
+<div class="settings-card">
   <h3>Runtime settings</h3>
-  <p><b>USE_REAL</b>: {settings.use_real}</p>
-  <p><b>Cache disabled</b>: {settings.cache_disabled}</p>
-  <p><b>Reports directory</b>: {settings.report_dir}</p>
+  <p><b>Real API key loaded</b>: {_has_openrouter_key()}</p>
+  <p><b>USE_REAL in .env</b>: {cfg.use_real}</p>
+  <p><b>Tavily key loaded</b>: {bool(cfg.tavily_api_key)}</p>
+  <p><b>Local reference images</b>: {_local_reference_file_count()}</p>
+  <p><b>Indexed reference rows</b>: {_vector_row_count()}</p>
+  <p><b>Reports</b>: {cfg.report_dir}</p>
 </div>
 """
                 )
 
     demo.queue().launch(
         server_name="127.0.0.1",
-        server_port=7860,
+        server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7860")),
         theme=gr.themes.Soft(),
         css=APP_CSS,
         js=FORCE_LIGHT_THEME_JS,

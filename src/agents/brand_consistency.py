@@ -83,7 +83,11 @@ def _build_images(state: GraphState, refs: list[RetrievedRef], deps: AgentDeps) 
     implemented (Person B's slice) or compositing fails for any reason, so
     Person C's agent works regardless of the other slice's progress.
     """
-    separate = [Path(state.image_path), *[Path(r.image_path) for r in refs]]
+    # Only include reference files that actually exist on disk. Paths come from
+    # the corpus and may be stale (image deleted/moved since ingest); a missing
+    # file would otherwise crash the vision encoder mid-run.
+    ref_paths = [Path(r.image_path) for r in refs if Path(r.image_path).exists()]
+    separate = [Path(state.image_path), *ref_paths]
     try:
         from src.tools.image_utils import load_image, side_by_side
 
