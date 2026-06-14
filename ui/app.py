@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Gradio UI for the Multimodal AI Design Analysis Suite.
 
 OWNER: Person E
@@ -16,7 +17,8 @@ WHY THIS FILE LIVES OUTSIDE ``src/``
 
 LAUNCH
 ------
-    python ui/app.py            # offline (fakes), no API key
+    ./ui/app.py                 # POSIX shells (shebang + executable bit)
+    python ui/app.py            # cross-platform (works on Windows too)
     USE_REAL=1 python ui/app.py # real OpenRouter, ≈ $0.03 / run
 """
 
