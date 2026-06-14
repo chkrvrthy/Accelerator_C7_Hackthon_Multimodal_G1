@@ -44,6 +44,7 @@ HINTS
 """
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional
 
@@ -87,6 +88,25 @@ class Finding(BaseModel):
     recommendation: str = Field(..., description="A concrete, one-sentence fix.")
 
 
+# TODO(person-d): require a WCAG 2.2 success-criterion number on every
+#                 accessibility finding (e.g. 1.4.3). Implemented as WCAGFinding.
+class WCAGFinding(Finding):
+    """Accessibility finding with a required WCAG 2.2 success-criterion citation."""
+
+    criterion: str = Field(
+        ...,
+        description="WCAG 2.2 SC number, e.g. '1.4.3'.",
+    )
+
+    @field_validator("criterion")
+    @classmethod
+    def _criterion_format(cls, v: str) -> str:
+        v = v.strip()
+        if not re.match(r"^\d+\.\d+\.\d+$", v):
+            raise ValueError(f"WCAG criterion must look like '1.4.3', got {v!r}")
+        return v
+
+
 # --------------------------------------------------------------------------- #
 # Per-agent outputs                                                            #
 # --------------------------------------------------------------------------- #
@@ -124,7 +144,7 @@ class UXCritique(BaseModel):
 class AccessibilityReport(BaseModel):
     """Person D — Accessibility Agent output (WCAG 2.2)."""
 
-    wcag_findings: list[Finding] = Field(default_factory=list)
+    wcag_findings: list[WCAGFinding] = Field(default_factory=list)
     # contrast_pass is None when the LLM was unsure and no opencv pass ran.
     contrast_pass: Optional[bool] = None
     est_min_touch_target_px: Optional[int] = Field(

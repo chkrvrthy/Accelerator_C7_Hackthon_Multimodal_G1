@@ -21,6 +21,7 @@ from src.schemas.outputs import (
     Severity,
     UXCritique,
     VisualAnalysis,
+    WCAGFinding,
 )
 
 
@@ -71,6 +72,30 @@ def test_design_report_with_specialists_round_trips():
 def test_graph_state_partial_validates():
     s = GraphState(image_path="x.png", instructions=None)
     assert s.visual is None and s.report is None
+
+
+def test_wcag_finding_requires_numeric_criterion():
+    f = WCAGFinding(
+        title="t",
+        description="d",
+        severity=Severity.HIGH,
+        evidence="e",
+        recommendation="r",
+        criterion="1.4.3",
+    )
+    assert f.criterion == "1.4.3"
+
+
+def test_wcag_finding_rejects_bad_criterion():
+    with pytest.raises(Exception):
+        WCAGFinding(
+            title="t",
+            description="d",
+            severity=Severity.HIGH,
+            evidence="e",
+            recommendation="r",
+            criterion="contrast",
+        )
 
 
 def test_retrieved_ref_score_is_float():

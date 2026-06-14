@@ -36,6 +36,7 @@ from src.schemas.outputs import (
     Severity,
     UXCritique,
     VisualAnalysis,
+    WCAGFinding,
 )
 
 
@@ -73,12 +74,13 @@ def _canned(schema: type[BaseModel]) -> dict[str, Any]:
         }
 
     if name == "AccessibilityReport":
-        finding = Finding(
+        finding = WCAGFinding(
             title="Insufficient color contrast on secondary CTA",
             description="Foreground/background pair fails WCAG AA.",
             severity=Severity.HIGH,
             evidence="Measured 3.2:1; AA requires 4.5:1.",
             recommendation="Darken text or background to meet AA.",
+            criterion="1.4.3",
         )
         return {
             "wcag_findings": [finding.model_dump()],
