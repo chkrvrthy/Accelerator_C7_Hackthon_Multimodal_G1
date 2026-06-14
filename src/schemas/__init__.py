@@ -20,6 +20,7 @@ from .outputs import (
     Severity,
     UXCritique,
     VisualAnalysis,
+    WCAGFinding,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "Severity",
     "UXCritique",
     "VisualAnalysis",
+    "WCAGFinding",
 ]

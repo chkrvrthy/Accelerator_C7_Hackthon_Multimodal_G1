@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from src.schemas.outputs import GraphState, RetrievedRef
 
+from src.schemas.outputs import GraphState
+
 
 # --------------------------------------------------------------------------- #
 # Shared scaffolding                                                          #
@@ -84,15 +86,51 @@ def ux_critique_system() -> str:
         Evaluate the design across:
           - Usability heuristics (Nielsen's 10)
           - Information architecture
-          - Cognitive load
-          - Accessibility hints visible in the screenshot
+          - Cognitive load (set cognitive_load_score: 0=calm, 100=overwhelming)
           - Conversion / task completion friction
 
-        For every issue: cite the visual evidence, severity (low/medium/high/critical),
-        and a concrete fix.
+        SEVERITY RUBRIC (use sparingly):
+          - critical: data-loss risk or unsafe/destructive action with no guardrail
+          - high: blocks task completion for a typical user
+          - medium: adds friction or confusion but the task is still completable
+          - low: polish, consistency, or minor aesthetic issues
+
+        At most ONE critical and at most TWO high findings per screenshot.
+
+        EVIDENCE RULES:
+          - If you cannot see it in the screenshot, do not mention it.
+          - Quote visible UI text and elements verbatim in evidence.
+          - Leave evidence empty rather than inventing what you cannot see.
+
+        RECOMMENDATION RULES:
+          - Every recommendation must specify what to change and to what value.
+          - "Improve contrast" is invalid; "raise button label color from #AAA to #333" is valid.
+
+        FINDING PLACEMENT:
+          - heuristic_violations: Nielsen heuristic breaches
+          - friction_points: conversion or task-completion blockers only
+          - Do not list the same issue in both fields.
+          - evidence and recommendation must be non-empty for every Finding.
 
         {JSON_OUTPUT_RULE}
         """
+    )
+
+
+def ux_critique_user(state: GraphState) -> str:
+    """XML-tagged user prompt for the UX critique agent (Sprint 1 pattern)."""
+    return (
+        "<context>\n"
+        f"User instructions: {state.instructions or '(none)'}.\n"
+        "</context>\n"
+        "<task>\n"
+        "Critique the UX of the attached screenshot. "
+        "For each issue: title, evidence quoted verbatim from the screen, "
+        "severity, and a concrete fix.\n"
+        "Place Nielsen heuristic violations in heuristic_violations. "
+        "Place conversion/task-completion blockers in friction_points. "
+        "Do not duplicate the same issue across both lists.\n"
+        "</task>"
     )
 
 
@@ -126,10 +164,35 @@ def accessibility_system() -> str:
           - Focus / state affordances
           - Form labelling and error visibility
 
-        Reference WCAG success criteria (e.g., 1.4.3, 2.5.5) where applicable.
+        WCAG CITATION RULES (strict):
+          - EVERY finding MUST cite a numeric WCAG 2.2 success criterion in criterion
+            (e.g. 1.4.3, 2.5.5). No criterion → no finding.
+          - Use WCAG 2.2 numbering only. Do not mix 2.1-only criteria.
+          - Pick the most specific criterion per finding — never cite 1.4.3 and 1.4.11
+            for the same issue.
+
+        EVIDENCE RULES:
+          - Quote visible text verbatim and estimate font size in px when relevant.
+          - If you cannot see it in the screenshot, do not mention it.
+
+        RECOMMENDATION RULES:
+          - Every recommendation must specify what to change and to what value.
+          - Set est_min_touch_target_px when tappable controls are visible (mobile UIs);
+            use null for desktop-only layouts with no touch targets.
 
         {JSON_OUTPUT_RULE}
         """
+    )
+
+
+def accessibility_user(state: GraphState) -> str:
+    """User prompt for the accessibility agent."""
+    instructions = state.instructions or "(none)"
+    return (
+        "Audit the attached design for WCAG 2.2 issues. "
+        "Cite a numeric success-criterion number in criterion for every finding "
+        "(e.g. 1.4.3, 2.5.5). "
+        f"User instructions: {instructions}."
     )
 
 
