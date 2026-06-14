@@ -51,6 +51,7 @@ PROMPT-ITERATION CHECKLIST
 from __future__ import annotations
 
 import argparse
+import html
 import json
 
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
@@ -69,17 +70,25 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, MarketResearch]:
     # NOTE: shape the search output as XML so the model treats it as data,
     # not as text to summarize. Same Sprint-1 pattern as the UX agent.
     snippets = "\n".join(
-        f"  <result rank='{i+1}' title='{h.title}' url='{h.url}'>{h.snippet}</result>"
+        "  "
+        f"<result rank='{i + 1}' "
+        f"title='{html.escape(h.title, quote=True)}' "
+        f"url='{html.escape(h.url, quote=True)}'>"
+        f"{html.escape(h.snippet)}"
+        "</result>"
         for i, h in enumerate(hits)
     )
     user_text = (
         "<query>" + query + "</query>\n"
         "<results>\n" + snippets + "\n</results>\n"
-        "<task>List 3-5 competitors and 3-5 trends grounded in the results.</task>"
+        "<task>"
+        "List 3-5 competitors and 3-5 trends grounded in the results. "
+        "Use ONLY competitor names and URLs that appear in <results>. "
+        "Copy cited URLs verbatim into citations. If the results are thin, "
+        "say so through opportunities or threats instead of inventing facts."
+        "</task>"
     )
 
-    # TODO(person-e): require the LLM to cite ONLY items from <results> (see
-    # the "Hallucinated URLs" item in the prompt-iteration checklist).
     result = run_with_schema(
         agent_name="agent.market",
         system=market_research_system(),
@@ -94,6 +103,7 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, MarketResearch]:
 
 def _cli() -> int:
     parser = argparse.ArgumentParser(description="Market Research agent (Person E)")
+    parser.add_argument("--image", default=None, help="Accepted for Makefile symmetry; unused.")
     parser.add_argument("--instructions", default="design competitors and trends")
     parser.add_argument("--use-real", action="store_true", default=None)
     args = parser.parse_args()
