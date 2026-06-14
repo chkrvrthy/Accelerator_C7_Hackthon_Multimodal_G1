@@ -32,19 +32,48 @@ short_description: Multi-agent design review with image RAG and OpenRouter.
 
 ```mermaid
 flowchart TB
-    User --> UI[Gradio UI]
-    UI --> Graph[LangGraph Orchestrator]
+    User --> UI[Gradio UI<br/>ui/app.py + state/handlers/render/references]
+    UI -- preflight + auto-resize --> Safety[Image safety gate<br/>src/utils/safe_image.py]
+    Safety --> Graph[LangGraph Orchestrator<br/>src/agents/graph.py]
     Graph --> Visual & UX & A11y & Brand & Market
-    Visual & UX & A11y & Brand & Market --> Synth[Synthesizer]
+    Visual & UX & A11y & Brand -.LangChain pre-tools.-> PreTools[Deterministic measurements<br/>palette / text-size / CTA / Δ-E]
+    Visual & UX & A11y & Brand & Market --> Synth[Synthesizer<br/>+ quality gate + 1-shot retry]
     Synth --> Report[DesignReport JSON]
     Brand -.uses.-> RAG[Image RAG<br/>CLIP + LanceDB]
     Market -.uses.-> Web[Tavily / DuckDuckGo]
-    Visual & UX & A11y & Brand -.uses.-> LLM[OpenRouter]
+    Visual & UX & A11y & Brand & Synth -.uses.-> LLM[OpenRouter via openai SDK]
+    LLM --> Resilience[Cost tracker + circuit breaker<br/>src/llm/cost_tracker.py]
+    Resilience -.cache.-> Cache[Disk-backed JSON cache<br/>src/llm/cost.py]
     External[Claude Code / MCP client] -.MCP.-> Graph
 ```
 
 The full diagram set lives in `docs/ARCHITECTURE.md` and the interactive
 walkthrough in `docs/walkthrough.html`.
+
+### What is in the diagram that is not in the curriculum
+
+Five robustness pillars wrap the multi-agent core. They are what turns
+this from a class project into something close to a product:
+
+1. **Image safety gate** (`src/utils/safe_image.py`) — preflight every
+   upload (suffix allowlist, 20 MB cap, 4 MP cap), then auto-resize to
+   1024 px before the pipeline ever sees the file.
+2. **LangChain `@tool` pre-tools** (`src/agents/tools.py`) — k-means
+   palette in CIELab, OpenCV text-size, CTA-density heuristic, Δ-E
+   palette distance. Run BEFORE the LLM, ground the prompt in measured
+   facts, save tokens.
+3. **Anti-hallucination prompt scaffolding** (`src/utils/prompts/`) —
+   every system prompt carries an `ANTI_HALLUCINATION_RULE` and an
+   `ABSTENTION_RULE`. Prompts are pinned by regression tests.
+4. **Cost tracker + circuit breaker** (`src/llm/cost_tracker.py`) —
+   per-run telemetry visible in Settings; fast-fail after 2 hard
+   failures so a typo'd API key cannot burn 25 doomed network calls.
+5. **Quality gate + 1-shot synthesizer retry** (`src/agents/quality_gate.py`)
+   — pure-Python content checks; if a `fail`-severity issue is found
+   in the first synthesizer output, ONE corrective re-prompt is sent.
+
+All five are implemented today. None of them ship as buzzwords; each
+has a one-page section in `docs/ARCHITECTURE.md`.
 
 ## Quickstart
 
@@ -146,28 +175,70 @@ hot-spots, and "done when" checklist for each slice.
 ## Repo layout
 
 ```
+app.py                       Hugging Face Spaces entry point — imports ui.app:main
+requirements.txt             HF Spaces dependency manifest
+
 src/
-  config.py            settings (pydantic-settings)
-  contracts.py         Protocol classes - the seams between people
-  schemas/outputs.py   every cross-module Pydantic model
-  fakes/               deterministic doubles for offline development
-  llm/                 OpenRouter, multimodal, cost cache, HF stub
-  rag/                 CLIP embedder, LanceDB store, retriever
-  tools/               web_search, image_utils, rag_tool (LangChain wrapper)
-  agents/              base + 5 specialists + synthesizer + graph
-  utils/               logger, prompts, tracing
-  evals/               schema-validity harness
-  mcp/server.py        stdio MCP server (analyze_design, search_designs)
-ui/app.py              Gradio Blocks
-scripts/               ingest_references, run_evals
+  config.py                  settings (pydantic-settings)
+  contracts.py               Protocol classes — the seams between people
+  schemas/outputs.py         every cross-module Pydantic model
+  fakes/                     deterministic doubles for offline development
+  llm/
+    openrouter_client.py     real LLMClient over OpenRouter
+    multimodal.py            vision message builder + encoder
+    cost.py                  disk-backed JSON cache + @cached decorator
+    cost_tracker.py          process-wide cost telemetry + circuit breaker
+    hf_local.py              Sprint 2 HF concept stub
+  rag/
+    embedder.py              CLIP image+text embedder
+    vector_store.py          LanceDB schema + open/get_or_create
+    retriever.py             retrieve_by_image / retrieve_by_text
+    editorial_refs.py        hand-curated fallback when RAG + web are empty
+  tools/
+    web_search.py            Tavily / DuckDuckGo provider
+    image_utils.py           side_by_side composite (saves tokens)
+    rag_tool.py              LangChain BaseTool wrapper around Retriever
+  agents/
+    base.py                  AgentDeps + run_with_schema helper
+    {visual_analysis,ux_critique,accessibility,brand_consistency,market_research}.py
+    synthesizer.py           fan-in node + quality-gate retry loop
+    graph.py                 LangGraph wiring + plain-Python fallback
+    tools.py                 LangChain @tool pre-tools (palette, text size, CTA, Δ-E)
+                             + basic tools (read_file, list_files, web_search)
+    quality_gate.py          pure-Python content checks for DesignReport
+    _color_math.py           CIELab / k-means / hex helpers (used by tools)
+  utils/
+    logger.py                loguru-based logger
+    tracing.py               LangSmith init + traced(...) context manager
+    safe_image.py            preflight + downsize for every upload
+    prompts/                 prompt PACKAGE: one file per agent
+      _shared.py             JSON / EVIDENCE / ANTI_HALLUCINATION /
+                             ABSTENTION / SELF_CHECK / TONE rules
+      visual.py / ux.py / market.py / accessibility.py /
+      brand.py / synthesizer.py
+  evals/                     schema-validity harness
+  mcp/server.py              stdio MCP server (analyze_design, search_designs)
+
+ui/
+  app.py                     Gradio Blocks — entry point + main()
+  state.py                   settings refresh + status / settings cards
+  handlers.py                on_run + classify_run_error (graceful errors)
+  render.py                  premium DesignReport HTML rendering
+  references.py              References-tab payload + ad-hoc search
+  styles.py                  loads APP_CSS + light-theme JS / HEAD HTML
+  static/app.css             actual CSS (1.3k lines, real .css file)
+
+scripts/                     ingest_references, run_evals
 tests/
-  conftest.py          shared fixtures
-  test_{schemas,contracts,fakes}.py    cross-cutting (everyone runs)
-  person_a..e/         per-slice tests
+  conftest.py                shared fixtures
+  test_{schemas,contracts,fakes,prompts,tools,safe_image,quality_gate,
+        editorial_refs}.py   cross-cutting (everyone runs)
+  person_a..e/               per-slice tests
 docs/
-  PERSON_*.md          per-person READMEs
+  PERSON_*.md                per-person READMEs
   ARCHITECTURE.md, DEMO_SCRIPT.md, CONCEPT_COVERAGE.md
-  walkthrough.html     self-contained interactive flow demo
+  COST_DISCIPLINE.md, DEPLOY_HF.md, FAQ.md
+  walkthrough.html           self-contained interactive flow demo
 ```
 
 ## Concept coverage
@@ -210,16 +281,20 @@ into free runs. Full breakdown in `docs/COST_DISCIPLINE.md`.
 - Multi-tenant LanceDB / per-tenant API keys. Single tenant for v1.
 - HTTP MCP transport. stdio only.
 - LLM-as-judge in evals. Schema-validity only — accurate enough for judging.
-- Pre-commit hooks. `make fmt && make lint` is the discipline.
+- Streaming token-by-token UI. Status updates per agent are emitted, the
+  final report renders at end of run.
+- Distributed tracing across services. LangSmith covers the LangGraph run.
 
 The full "what we'd do for production" list is in
 `docs/walkthrough.html` → **Scaling** tab.
 
 ## Tech stack
 
-OpenRouter via `openai` SDK · LangGraph · LangChain-core · LangSmith ·
-LanceDB · open_clip_torch · LlamaIndex (concept claim) · Pydantic v2 ·
-Gradio · Tavily / DuckDuckGo · MCP Python SDK · pytest · ruff · black · mypy.
+OpenRouter via `openai` SDK · LangGraph · LangChain-core (with `@tool`
+decorator wiring) · LangSmith · LanceDB · open_clip_torch · LlamaIndex
+(concept claim) · Pydantic v2 + pydantic-settings · Gradio · Tavily /
+DuckDuckGo (auto fallback) · MCP Python SDK · OpenCV + Pillow + NumPy
+(deterministic pre-tools) · pytest · ruff · black · mypy.
 
 One library per concept — no duplicates.
 

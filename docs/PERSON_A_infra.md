@@ -24,16 +24,21 @@ via Protocols, fakes for offline development, and the cross-cutting test suite.
 | `src/schemas/outputs.py` | Pydantic models for every cross-module data shape. |
 | `src/contracts.py` | Protocol classes — the seams between people. |
 | `src/fakes/*` | Deterministic doubles for every Protocol. |
-| `src/llm/openrouter_client.py` | Real `LLMClient` over OpenRouter. |
+| `src/llm/openrouter_client.py` | Real `LLMClient` over OpenRouter — wired to cost-tracker + circuit-breaker. |
 | `src/llm/multimodal.py` | Real `VisionLLM`. |
-| `src/llm/cost.py` | Disk-backed response cache + `select_model` stub. |
+| `src/llm/cost.py` | Disk-backed response cache + `@cached` decorator. |
+| `src/llm/cost_tracker.py` | Process-wide cost telemetry + circuit breaker. |
 | `src/llm/hf_local.py` | Sprint 2 HF concept stub. |
 | `src/agents/base.py` | `AgentDeps` container + `run_with_schema` helper. |
-| `src/agents/synthesizer.py` | Aggregate specialists → `DesignReport`. |
+| `src/agents/synthesizer.py` | Aggregate specialists → `DesignReport` + 1-shot quality-gate retry. |
 | `src/agents/graph.py` | LangGraph wiring + plain-Python fallback. |
+| `src/agents/quality_gate.py` | Pure-Python content checks for `DesignReport`. |
+| `src/agents/tools.py` | LangChain `@tool` registry — pre-tools + basic tools. |
+| `src/agents/_color_math.py` | CIELab / k-means helpers used by `tools.py`. |
 | `src/utils/tracing.py` | LangSmith init + `traced` context manager. |
+| `src/utils/safe_image.py` | Upload preflight + auto-resize. |
 | `src/evals/*` | Schema-validity eval harness. |
-| `tests/conftest.py`, `tests/test_{schemas,contracts,fakes}.py`, `tests/person_a/*` | Cross-cutting + your slice tests. |
+| `tests/conftest.py`, `tests/test_{schemas,contracts,fakes,prompts,tools,safe_image,quality_gate}.py`, `tests/person_a/*` | Cross-cutting + your slice tests. |
 
 ## Architecture view
 

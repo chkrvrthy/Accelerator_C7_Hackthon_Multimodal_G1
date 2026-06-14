@@ -23,9 +23,17 @@ chat panel (Claude Code, etc.) over a wire protocol.
 |---|---|
 | `src/agents/market_research.py` | `run(state, deps)` → `{"market": MarketResearch}`. |
 | `src/tools/web_search.py` | `TavilySearch`, `DuckDuckGoSearch`, default selector. |
-| `ui/app.py` | Gradio Blocks UI. |
+| `src/rag/editorial_refs.py` | Hand-curated fallback when web search returns empty. |
+| `ui/app.py` | Gradio Blocks entry point + `main()`. |
+| `ui/state.py` | Settings refresh + status / settings cards / telemetry. |
+| `ui/handlers.py` | `on_run` (Tab 1 streaming handler) + graceful error classifier. |
+| `ui/render.py` | Premium DesignReport HTML rendering. |
+| `ui/references.py` | References-tab payload (from-report + ad-hoc search). |
+| `ui/styles.py` + `ui/static/app.css` | App CSS (real .css file) + light-theme JS / HEAD. |
+| `app.py` (root) | HF Spaces entry shim — imports `ui.app:main`. |
+| `requirements.txt` (root) | HF Spaces dependency manifest. |
 | `src/mcp/server.py` | stdio MCP server with two tools. |
-| `tests/person_e/*` | Your test slice. |
+| `tests/person_e/*`, `tests/test_safe_image.py`, `tests/test_prompts.py`, `tests/test_editorial_refs.py` | Your test slice + new-feature tests you helped land. |
 
 ## Contracts you implement / consume
 

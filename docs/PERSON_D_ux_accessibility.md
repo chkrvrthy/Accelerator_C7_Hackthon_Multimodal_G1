@@ -19,8 +19,10 @@ a measured value. The LLM never overrides a measured number.
 
 | File | One-line purpose |
 |---|---|
-| `src/agents/ux_critique.py` | `run(state, deps)` → `{"ux": UXCritique}`. |
-| `src/agents/accessibility.py` | `run(state, deps)` → `{"accessibility": AccessibilityReport}`. |
+| `src/agents/ux_critique.py` | `run(state, deps)` → `{"ux": UXCritique}`; runs `cta_density` pre-tool. |
+| `src/agents/accessibility.py` | `run(state, deps)` → `{"accessibility": AccessibilityReport}`; runs `estimate_text_size` pre-tool first. |
+| `src/utils/prompts/ux.py` | UX system + user prompts (LRU-cached, anti-hallucination + closed Nielsen list). |
+| `src/utils/prompts/accessibility.py` | Accessibility system + user prompts (closed WCAG SC list to prevent SC fabrication). |
 | `src/schemas/outputs.py` (your two output models) | `UXCritique`, `AccessibilityReport`. |
 | `tests/person_d/*` | Your test slice. |
 

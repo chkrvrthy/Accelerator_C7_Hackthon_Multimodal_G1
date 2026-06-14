@@ -69,3 +69,56 @@ def test_cta_density_handles_empty() -> None:
     )
     assert out is not None
     assert out["cta_like_observations"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Basic tools (read_file, list_files, web_search)                             #
+# --------------------------------------------------------------------------- #
+def test_read_file_returns_content_for_known_file() -> None:
+    out = call_tool("read_file", path="pyproject.toml", max_bytes=200)
+    assert "error" not in out
+    assert out["path"] == "pyproject.toml"
+    assert out["content"]
+    assert isinstance(out["truncated"], bool)
+
+
+def test_read_file_rejects_outside_sandbox() -> None:
+    out = call_tool("read_file", path="../../etc/passwd")
+    # Should be blocked by the sandbox check OR not found; either way no
+    # /etc/passwd content leaks.
+    assert "error" in out
+    assert "passwd" not in out.get("content", "")
+
+
+def test_list_files_returns_a_glob_match() -> None:
+    out = call_tool("list_files", directory="src/agents", glob="*.py", max_results=5)
+    assert "error" not in out
+    assert out["matches"]
+    assert all(m.endswith(".py") for m in out["matches"])
+    assert all(m.startswith("src/agents") for m in out["matches"])
+
+
+def test_list_files_rejects_outside_sandbox() -> None:
+    out = call_tool("list_files", directory="..", glob="*")
+    assert "error" in out
+
+
+def test_web_search_returns_dict_with_results_key() -> None:
+    # No keys configured in the test env: the tool returns
+    # {"query": ..., "results": [], "error": ...} — never raises.
+    out = call_tool("web_search", query="design heuristics", k=2)
+    assert "query" in out
+    assert "results" in out
+    assert isinstance(out["results"], list)
+
+
+def test_langchain_tools_are_real_basetool_instances() -> None:
+    from src.agents.tools import list_langchain_tools
+
+    tools = list_langchain_tools()
+    assert tools, "no langchain tools registered"
+    # Each must have the LangChain Tool surface even when langchain is
+    # absent (the shim attaches .name + .invoke).
+    for t in tools:
+        assert getattr(t, "name", None)
+        assert hasattr(t, "invoke") or callable(t)

@@ -113,10 +113,17 @@ this is a "panel of experts" / multi-agent pattern, not model council.
 | Crew AI | ❌ | ✅ | — (but similar) |
 
 The five agents (Visual / UX / A11y / Brand / Market) are differentiated by:
-- **System prompt** (each has its own persona and rubric in `src/utils/prompts.py`).
+- **System prompt** (each has its own persona and rubric in
+  `src/utils/prompts/<agent>.py`; the package re-exports keep
+  `from src.utils.prompts import visual_analysis_system` working).
 - **Output schema** (each emits a different Pydantic class).
 - **Inputs** (4/5 use the image; Market uses text + web search results).
-- **Tools available** (only Brand uses the Retriever; only Market uses Web Search).
+- **Tools available** — every agent has zero or more LangChain `@tool`
+  pre-tools registered to it via `src/agents/tools.py::register`. Visual
+  runs `extract_palette`; accessibility runs `estimate_text_size`; UX
+  runs `cta_density`; brand runs `palette_distance`. Brand also uses the
+  Retriever; market uses Web Search. Anti-hallucination + abstention
+  rules are templated into every prompt from `src/utils/prompts/_shared.py`.
 
 They all hit the same vision/text LLM by default. The synthesizer then
 fan-ins across all five into one `DesignReport`.
@@ -247,25 +254,55 @@ in `src/llm/openrouter_client.py` (`base_url`). Documented as post-MVP.
 
 ## 6. Will I see error messages when I run? (Debugging story)
 
-Yes. Three principles guarantee visible errors:
+There are TWO surfaces and they behave differently on purpose:
+
+### 6.1 Server-side (developer / operator) — verbose logs, full stacks
+
+You will see everything. Three principles enforce it:
 
 1. **Every LLM call goes through `run_with_schema`** in `src/agents/base.py`,
-   which logs `INFO` on entry, `ERROR` on exception (with full type+message),
-   then re-raises. You will see things like:
+   which logs `INFO` on entry, `ERROR` on exception (with full type +
+   message), then re-raises. You will see things like:
    ```
    14:25:01 INFO   agent.visual: starting (schema=VisualAnalysis, images=1)
    14:25:03 ERROR  agent.visual: failed: openai.RateLimitError: rate limit exceeded
    ```
-2. **No `except Exception: pass`** anywhere on the critical path. The only
-   broad-except is in the eval harness (it deliberately scores past one
-   bad field), and that one logs `WARNING` with which field failed.
+2. **`on_run` in `ui/handlers.py` calls `log.exception(...)`** on any
+   uncaught failure, so the full traceback hits the server log even when
+   the user sees only a clean banner.
 3. **Loguru → stderr by default**, level = INFO. To bump to DEBUG for a
    single run:
    ```bash
-   LOG_LEVEL=DEBUG python -m src.agents.graph --image data/uploads/dashboard.png
+   LOG_LEVEL=DEBUG python -m ui.app
    ```
 
-Per-slice quick-debug commands:
+The Settings tab also surfaces a live cost / resilience telemetry card
+(`ui/state.py::_cost_telemetry_html`) — calls, tokens, cache hits,
+circuit-breaker state — which is enough for 90 % of debugging without
+opening a log file.
+
+### 6.2 Client-side (the end user) — graceful banners only
+
+The user NEVER sees a Python traceback. Every exception from `on_run`
+flows through `ui/handlers.py::_classify_run_error`, which maps it to
+a user-friendly (title, body) banner. Examples:
+
+| Exception | Banner the user sees |
+| --- | --- |
+| `CircuitOpenError` | "API temporarily unavailable" + suggestion to switch to offline mode |
+| `AuthenticationError` | "API key rejected" + how to verify |
+| `RateLimitError` | "Rate limit reached" + suggestion to wait or use offline mode |
+| `APIConnectionError` / `Timeout` | "Could not reach the model provider" |
+| `pydantic.ValidationError` | "Model returned an unexpected response" |
+| Anything else | Generic friendly fallback; details are in the server log |
+
+Same story for the references search and the upload preflight: every
+external call is wrapped, and the user sees a calm "some sources
+unavailable" hint rather than a popup. Image upload validation
+(`src/utils/safe_image.py`) raises an `UploadError` with a typed
+`user_title` + `user_body` that flows straight into the banner.
+
+### 6.3 Per-slice quick-debug commands
 
 ```bash
 make run-c-visual        # Person C — visual analysis only, prints JSON
@@ -362,8 +399,14 @@ in `docs/DEMO_SCRIPT.md`, and the MCP tab in `docs/walkthrough.html`.
 | --- | --- |
 | Temperature reasoning | `src/config.py` (next to the field) |
 | Image-passing path | `src/llm/multimodal.py` (top docstring) |
+| Image upload safety | `src/utils/safe_image.py` (preflight + downsize) |
 | Multi-agent vs model-council | `src/agents/graph.py` (top docstring) + `select_model` in `src/llm/cost.py` |
-| OSS vs paid SaaS | `requirements/*.txt` headers + this FAQ |
-| Logging contract | `src/agents/base.py::run_with_schema` |
-| Deployment | `README.md` "Deploy" section + this FAQ |
+| Anti-hallucination policy | `src/utils/prompts/_shared.py` (`ANTI_HALLUCINATION_RULE`, `ABSTENTION_RULE`) + `tests/test_prompts.py` (regression-pinned) |
+| LangChain `@tool` registry | `src/agents/tools.py` + `tests/test_tools.py` |
+| OSS vs paid SaaS | `requirements*.txt` headers + this FAQ |
+| Server-side logging contract | `src/agents/base.py::run_with_schema` + `ui/handlers.py::on_run` |
+| Client-side error banners | `ui/handlers.py::_classify_run_error` |
+| Cost telemetry | `src/llm/cost_tracker.py` + Settings tab in the UI |
+| Quality gate + retry | `src/agents/quality_gate.py` + `src/agents/synthesizer.py` (retry loop) |
+| Deployment | `README.md` "Deploy" section + `docs/DEPLOY_HF.md` + this FAQ |
 | MCP server purpose | `src/mcp/server.py` top docstring + this FAQ § 7 |

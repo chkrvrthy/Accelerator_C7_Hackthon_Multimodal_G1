@@ -19,8 +19,10 @@ during a normal demo run. Treat it as the highest-value path.
 
 | File | One-line purpose |
 |---|---|
-| `src/agents/visual_analysis.py` | `run(state, deps)` → `{"visual": VisualAnalysis}`. |
-| `src/agents/brand_consistency.py` | `run(state, deps)` → `{"brand": BrandConsistency}`. |
+| `src/agents/visual_analysis.py` | `run(state, deps)` → `{"visual": VisualAnalysis}`; runs `extract_palette` pre-tool first. |
+| `src/agents/brand_consistency.py` | `run(state, deps)` → `{"brand": BrandConsistency}`; runs `palette_distance` pre-tool. |
+| `src/utils/prompts/visual.py` | Visual system + user prompts (LRU-cached, anti-hallucination rules baked in). |
+| `src/utils/prompts/brand.py` | Brand system + user prompts. |
 | `src/schemas/outputs.py` (your two output models) | `VisualAnalysis`, `BrandConsistency`. |
 | `tests/person_c/*` | Your test slice. |
 

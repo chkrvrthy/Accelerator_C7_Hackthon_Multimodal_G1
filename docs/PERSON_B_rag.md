@@ -26,10 +26,11 @@ your concrete classes.
 | `src/rag/embedder.py` | CLIP image+text embeddings (same vector space). |
 | `src/rag/vector_store.py` | LanceDB schema + open/upsert/query helpers. |
 | `src/rag/retriever.py` | `LanceRetriever` implementing `Retriever`. |
+| `src/rag/editorial_refs.py` | Hand-curated fallback when index + web search are empty. |
 | `src/tools/image_utils.py` | Pillow helpers used by everyone. |
 | `src/tools/rag_tool.py` | LangChain BaseTool wrapper (Sprint 5 concept). |
 | `scripts/ingest_references.py` | CLI to populate LanceDB from `data/reference/`. |
-| `tests/person_b/*` | Your test slice. |
+| `tests/person_b/*`, `tests/test_editorial_refs.py` | Your test slice + the new fallback tests. |
 
 ## Architecture view
 

@@ -79,6 +79,8 @@ Each specialist runs zero or more **deterministic pre-tools** *before* the LLM. 
 | brand | `palette_distance` | CIELab Δ-E between candidate and reference palettes |
 | ux | `cta_density` | CTA-like word count from visual observations |
 
+The pre-tools are real **LangChain `@tool`** decorated functions — registered via `src/agents/tools.py` and compatible with `model.bind_tools(...)` if any agent ever wants to expose them as model-callable tools. The same module also registers the **basic tools** (`read_file`, `list_files`, `web_search`) so a future routing node has read-only file IO + search out of the box.
+
 Pre-tools cost **zero LLM tokens** and reduce the tokens the model spends speculating. They are auditable in the Settings → "Agent tools" card.
 
 ### 2.6 Caching
@@ -131,7 +133,19 @@ The Settings tab shows everything live:
 
 Click "Refresh telemetry" after any run.
 
-## 6. Things you can do to spend even less
+## 6. Anti-hallucination policy as a cost control
+
+This is the under-appreciated cost lever. Every system prompt carries an `ANTI_HALLUCINATION_RULE` and an `ABSTENTION_RULE` (in `src/utils/prompts/_shared.py`). They explicitly tell the model to abstain — emit `null`, `[]`, or "not measurable" — when evidence is missing rather than fabricating something plausible.
+
+Why this saves money:
+
+- **Shorter outputs.** A model that abstains writes 3 grounded recommendations instead of 5 padded ones. Median completion-token spend drops measurably.
+- **Fewer retries.** The synthesizer's quality-gate retry triggers when fields are missing or thin. Strong abstention rules mean the gate fires less often.
+- **Better cache hit rate.** Grounded outputs are more deterministic at temperature 0.2 than fabricated ones, so the disk cache hits more reliably on repeat demos.
+
+The rules are pinned by `tests/test_prompts.py` so a future refactor cannot silently delete them.
+
+## 7. Things you can do to spend even less
 
 1. **Use the offline fakes** (`USE_REAL=false` in `.env`). Zero tokens, perfect for demos and tests.
 2. **Use the same image twice.** The cache makes the second run free.

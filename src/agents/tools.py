@@ -1,4 +1,4 @@
-"""Per-agent deterministic pre-tools + a tiny tool registry.
+"""LangChain-native tool registry.
 
 OWNER: Person A
 SPRINT CONCEPTS: Sprint 5 (tool-augmented agents), Sprint 6 (cost
@@ -6,128 +6,202 @@ optimization — measured facts beat hallucinated ones).
 
 WHY THIS FILE EXISTS
 --------------------
-Most of our agents were single-shot LLM calls dressed up as agents.
-A real agent has tools it can call BEFORE the LLM to ground its work
-in measured facts. We do not need a full ReAct loop for v1; the simpler,
-cheaper, and far more reliable pattern is **pre-tools**:
+Two roles:
 
-    1. Run cheap deterministic tools (PIL, opencv, numpy).
-    2. Inject the measurements into the LLM's user prompt.
-    3. Let the LLM enrich / interpret — but never invent — those facts.
+1. **Pre-tools** for our specialist agents. Run BEFORE the LLM, return
+   measured ground truth, and let the agent prompt anchor on facts the
+   model would otherwise have to invent. Net token saver.
 
-That is a *token saver*, not a token consumer:
-    - The model spends fewer output tokens speculating about colors,
-      contrast, and text size — those are pasted in as ground truth.
-    - The model is far less likely to hallucinate; the prompt anchors it.
-    - The agent is auditable: the tool's measurement is in the trace.
+2. **Basic tools** (file IO, web search) that any agent — or any
+   future LangGraph routing node — can pull in via the standard
+   ``model.bind_tools([...])`` API.
 
-The registry below is intentionally tiny: a name -> callable map. We
-chose pure functions over objects because the only thing the rest of
-the system needs is "what tools does agent X own?" for the Settings
-tab and for documentation.
+Implementation choice: every tool below is a `langchain_core.tools.tool`
+decorated function. That makes the surface 100 % compatible with:
+
+  * LangChain's ``ChatOpenAI(...).bind_tools([...])``
+  * LangGraph's ``ToolNode``
+  * LangSmith trace UI (each invocation gets its own span)
+
+The local registry adds one piece of metadata LangChain doesn't carry
+out of the box: ``owner_agent`` — so the Settings tab can render
+"these are visual's tools, these are ux's, ..." for auditability.
+
+NEVER CRASHES
+-------------
+Tools are best-effort. Every public tool either returns a JSON-able
+dict, an empty dict, or ``None`` when its dependency is missing. None
+of them raises. The agent run continues even if every tool comes back
+empty — the LLM is the source of truth, the tools just make it cheaper.
 """
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.agents._color_math import (
+    hex_to_rgb01 as _hex_to_rgb01,
+)
+from src.agents._color_math import (
+    lab_to_srgb as _lab_to_srgb,
+)
+from src.agents._color_math import (
+    mini_kmeans as _mini_kmeans,
+)
+from src.agents._color_math import (
+    srgb_to_lab as _srgb_to_lab,
+)
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
 
 # --------------------------------------------------------------------------- #
+# LangChain @tool import — lazy, so envs without langchain still import       #
+# --------------------------------------------------------------------------- #
+try:
+    from langchain_core.tools import BaseTool, tool
+
+    _HAS_LANGCHAIN = True
+except ImportError:  # graceful: build a tiny shim so this module still loads
+    _HAS_LANGCHAIN = False
+    BaseTool = object  # type: ignore[assignment,misc]
+
+    def tool(*dargs: Any, **dkw: Any) -> Any:  # type: ignore[no-redef]
+        """Stand-in for langchain_core.tools.tool when langchain is missing.
+
+        Returns the function unchanged; ``.invoke({...})`` is mimicked by
+        attaching a small attribute proxy so :func:`call_tool` keeps
+        working on a partial install.
+        """
+
+        def _decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
+            fn.name = getattr(fn, "name", fn.__name__)  # type: ignore[attr-defined]
+            fn.description = (fn.__doc__ or "").strip().splitlines()[0] if fn.__doc__ else ""  # type: ignore[attr-defined]
+
+            def _invoke(payload: dict[str, Any]) -> Any:
+                return fn(**payload)
+
+            fn.invoke = _invoke  # type: ignore[attr-defined]
+            return fn
+
+        if dargs and callable(dargs[0]):  # bare @tool with no args
+            return _decorate(dargs[0])
+        return _decorate
+
+
+# --------------------------------------------------------------------------- #
 # Registry                                                                    #
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
-class Tool:
-    """One registered tool.
+class RegisteredTool:
+    """A LangChain tool plus the owner-agent metadata.
 
-    Fields:
-        name: stable identifier ("visual.extract_palette").
-        owner_agent: the agent that uses it ("visual", "ux", ...).
-        description: one-line human description for the Settings tab.
-        run: the callable. Returns a JSON-able dict (or None if it could
-             not run, e.g. dependency missing).
+    LangChain's ``BaseTool`` already carries the ``name``, ``description``
+    and ``args_schema`` we need. The only thing it does not have is who
+    owns the tool semantically (visual / ux / accessibility / brand /
+    basic) — we add that here so the Settings tab can group by owner.
     """
 
-    name: str
+    tool: Any  # BaseTool when LangChain is installed; bare function otherwise
     owner_agent: str
-    description: str
-    run: Callable[..., dict[str, Any] | None]
+
+    @property
+    def name(self) -> str:
+        return getattr(self.tool, "name", "")
+
+    @property
+    def description(self) -> str:
+        return getattr(self.tool, "description", "") or ""
 
 
-_REGISTRY: dict[str, Tool] = {}
+_REGISTRY: dict[str, RegisteredTool] = {}
 
 
-def register_tool(
-    *,
-    name: str,
-    owner_agent: str,
-    description: str,
-) -> Callable[[Callable[..., dict[str, Any] | None]], Callable[..., dict[str, Any] | None]]:
-    """Decorator: register a tool by name.
+def register(owner_agent: str, *, alias: str | None = None) -> Callable[[Any], Any]:
+    """Mark a ``@tool``-decorated function as belonging to ``owner_agent``.
 
-    Usage::
-
-        @register_tool(name="visual.extract_palette",
-                       owner_agent="visual",
-                       description="K-means palette in CIELab")
-        def extract_palette(image_path: str, k: int = 5) -> dict | None:
-            ...
+    ``alias`` lets us register the SAME tool under two names — useful
+    for backward compatibility (the v1 API used dotted names like
+    ``visual.extract_palette``; the LangChain-native name is just
+    ``extract_palette``).
     """
 
-    def _decorate(fn: Callable[..., dict[str, Any] | None]) -> Callable[..., dict[str, Any] | None]:
-        _REGISTRY[name] = Tool(name=name, owner_agent=owner_agent, description=description, run=fn)
-        return fn
+    def _decorate(t: Any) -> Any:
+        _REGISTRY[t.name] = RegisteredTool(tool=t, owner_agent=owner_agent)
+        if alias is not None:
+            _REGISTRY[alias] = RegisteredTool(tool=t, owner_agent=owner_agent)
+        return t
 
     return _decorate
 
 
-def list_tools(owner_agent: str | None = None) -> list[Tool]:
-    """Return all registered tools, or only those owned by ``owner_agent``."""
-    if owner_agent is None:
-        return list(_REGISTRY.values())
-    return [t for t in _REGISTRY.values() if t.owner_agent == owner_agent]
+def list_tools(owner_agent: str | None = None) -> list[RegisteredTool]:
+    """Return every registered tool, or only those owned by ``owner_agent``.
+
+    De-duplicates aliased entries so the Settings tab does not list the
+    same tool twice.
+    """
+    seen: set[int] = set()
+    out: list[RegisteredTool] = []
+    for rt in _REGISTRY.values():
+        if id(rt.tool) in seen:
+            continue
+        seen.add(id(rt.tool))
+        if owner_agent is None or rt.owner_agent == owner_agent:
+            out.append(rt)
+    return sorted(out, key=lambda r: (r.owner_agent, r.name))
 
 
-def call_tool(name: str, **kwargs: Any) -> dict[str, Any] | None:
-    """Invoke a registered tool. Returns None on missing tool or runtime error."""
-    tool = _REGISTRY.get(name)
-    if tool is None:
-        log.warning("tools.call_tool: unknown tool %r", name)
+def list_langchain_tools(owner_agent: str | None = None) -> list[Any]:
+    """Return raw ``BaseTool`` objects, e.g. for ``model.bind_tools(...)``.
+
+    Use this when you want to hand a subset of our tools to a LangChain
+    chat model so it can call them directly.
+    """
+    return [rt.tool for rt in list_tools(owner_agent)]
+
+
+def call_tool(name: str, **kwargs: Any) -> Any:
+    """Invoke a registered tool by name. Returns ``None`` on any error.
+
+    The behavior is intentionally forgiving: if the tool is missing,
+    its dependency is missing, or it raises mid-run, the call returns
+    ``None`` and the caller's pipeline keeps moving. The full failure
+    is logged at WARNING level.
+    """
+    rt = _REGISTRY.get(name)
+    if rt is None:
+        log.warning("call_tool: unknown tool %r", name)
         return None
     try:
-        return tool.run(**kwargs)
+        if hasattr(rt.tool, "invoke"):
+            return rt.tool.invoke(kwargs)
+        return rt.tool(**kwargs)
     except Exception as e:  # tools must never crash the agent run
-        log.warning("tools.%s failed (%s); proceeding without measurement", name, e)
+        log.warning("call_tool(%s) failed (%s); returning None", name, e)
         return None
 
 
 # --------------------------------------------------------------------------- #
-# VISUAL agent tools                                                          #
+# Visual agent — extract_palette                                              #
 # --------------------------------------------------------------------------- #
-@register_tool(
-    name="visual.extract_palette",
-    owner_agent="visual",
-    description="Extract a 3-6 colour palette from a screenshot via k-means in CIELab.",
-)
-def extract_palette(image_path: str | Path, k: int = 5) -> dict[str, Any] | None:
-    """Return a deterministic top-k palette as a list of hex codes.
+@register(owner_agent="visual", alias="visual.extract_palette")
+@tool
+def extract_palette(image_path: str, k: int = 5) -> dict[str, Any] | None:
+    """Extract a 3-6 colour palette from a screenshot via k-means in CIELab.
 
-    Strategy:
-      1. Read with PIL, resize to ~256 px max for speed.
-      2. Convert to CIELab (perceptually uniform; clusters look right).
-      3. K-means cluster the pixels, take centroid colors.
-      4. Sort by cluster size (largest first), return hex codes.
+    Args:
+        image_path: Path to the screenshot. Supports png / jpg / webp.
+        k: Number of palette slots; clamped to 3-6.
 
-    Returns:
-        ``{"palette": ["#RRGGBB", ...], "method": "kmeans-lab"}`` or None
-        when PIL / numpy is missing (we accept the cost: the LLM picks
-        colors itself in that branch).
+    Returns a dict ``{"palette": ["#RRGGBB", ...], "method": "kmeans-lab",
+    "k": int}`` or ``None`` when numpy / Pillow is missing.
     """
     try:
         import numpy as np
@@ -138,16 +212,10 @@ def extract_palette(image_path: str | Path, k: int = 5) -> dict[str, Any] | None
     p = Path(image_path)
     if not p.exists():
         return None
-
     img = Image.open(p).convert("RGB")
     img.thumbnail((256, 256))
     arr = np.asarray(img).reshape(-1, 3).astype(np.float32) / 255.0
-
-    # Convert sRGB -> CIELab via the simple matrix path (no skimage dep).
-    # The math is not pixel-perfect against ICC profiles, but for picking
-    # a 5-colour design palette it is more than enough.
     lab = _srgb_to_lab(arr)
-
     centers, sizes = _mini_kmeans(lab, k=max(3, min(6, k)), iters=8)
     order = sizes.argsort()[::-1]
     centers = centers[order]
@@ -157,123 +225,34 @@ def extract_palette(image_path: str | Path, k: int = 5) -> dict[str, Any] | None
     return {"palette": palette, "method": "kmeans-lab", "k": len(palette)}
 
 
-def _mini_kmeans(points: Any, k: int, iters: int = 8, seed: int = 0) -> tuple[Any, Any]:
-    """Tiny numpy k-means. Deterministic via fixed seed."""
-    import numpy as np
-
-    rng = np.random.default_rng(seed)
-    idx = rng.choice(len(points), size=k, replace=False)
-    centers = points[idx].copy()
-    sizes = np.zeros(k, dtype=np.int64)
-    for _ in range(iters):
-        # assign
-        d2 = ((points[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
-        labels = d2.argmin(axis=1)
-        # update
-        for j in range(k):
-            mask = labels == j
-            if mask.any():
-                centers[j] = points[mask].mean(axis=0)
-                sizes[j] = int(mask.sum())
-    return centers, sizes
-
-
-def _srgb_to_lab(rgb: Any) -> Any:
-    """sRGB[0,1] -> CIELab. Inputs Nx3, outputs Nx3."""
-    import numpy as np
-
-    def _f(c: Any) -> Any:
-        return np.where(c > 0.04045, ((c + 0.055) / 1.055) ** 2.4, c / 12.92)
-
-    rgb_lin = _f(rgb)
-    M = np.array(  # noqa: N806 — sRGB → XYZ transform matrix (linear-algebra convention)
-        [
-            [0.4124564, 0.3575761, 0.1804375],
-            [0.2126729, 0.7151522, 0.0721750],
-            [0.0193339, 0.1191920, 0.9503041],
-        ]
-    )
-    xyz = rgb_lin @ M.T
-    # Normalise by D65 reference white
-    ref = np.array([0.95047, 1.00000, 1.08883])
-    xyz_n = xyz / ref
-    eps = 6.0 / 29.0
-
-    def _g(t: Any) -> Any:
-        return np.where(t > eps**3, np.cbrt(t), (t / (3 * eps**2)) + 4 / 29)
-
-    f = _g(xyz_n)
-    L = 116 * f[:, 1] - 16  # noqa: N806 — CIELab convention (L*a*b*)
-    a = 500 * (f[:, 0] - f[:, 1])
-    b = 200 * (f[:, 1] - f[:, 2])
-    return np.stack([L, a, b], axis=1)
-
-
-def _lab_to_srgb(lab: Any) -> Any:
-    """CIELab -> sRGB[0,1]. Inputs Nx3."""
-    import numpy as np
-
-    L, a, b = lab[:, 0], lab[:, 1], lab[:, 2]  # noqa: N806 — CIELab convention
-    fy = (L + 16) / 116
-    fx = a / 500 + fy
-    fz = fy - b / 200
-
-    def _g_inv(t: Any) -> Any:
-        eps = 6.0 / 29.0
-        return np.where(t > eps, t**3, 3 * eps**2 * (t - 4 / 29))
-
-    ref = np.array([0.95047, 1.00000, 1.08883])
-    xyz = np.stack([_g_inv(fx) * ref[0], _g_inv(fy) * ref[1], _g_inv(fz) * ref[2]], axis=1)
-    M_inv = np.array(  # noqa: N806 — XYZ → sRGB inverse transform
-        [
-            [3.2404542, -1.5371385, -0.4985314],
-            [-0.9692660, 1.8760108, 0.0415560],
-            [0.0556434, -0.2040259, 1.0572252],
-        ]
-    )
-    rgb_lin = xyz @ M_inv.T
-
-    def _g(c: Any) -> Any:
-        return np.where(c > 0.0031308, 1.055 * (c ** (1 / 2.4)) - 0.055, c * 12.92)
-
-    return _g(rgb_lin)
-
-
 # --------------------------------------------------------------------------- #
-# ACCESSIBILITY agent tools                                                   #
+# Accessibility agent — estimate_text_size                                    #
 # --------------------------------------------------------------------------- #
-@register_tool(
-    name="accessibility.estimate_text_size",
-    owner_agent="accessibility",
-    description="Estimate the smallest visible text region in pixels via OpenCV connected components.",
-)
-def estimate_text_size(image_path: str | Path) -> dict[str, Any] | None:
-    """Return a coarse "smallest text region in px" estimate.
+@register(owner_agent="accessibility", alias="accessibility.estimate_text_size")
+@tool
+def estimate_text_size(image_path: str) -> dict[str, Any] | None:
+    """Measure smallest / median / largest text-region heights in pixels.
 
-    Useful as ground truth for the accessibility LLM:
-        "We measured the smallest text region at ~12 px tall. Combined
-         with the LLM's reading of the screenshot, this lets the agent
-         make a confident call on WCAG 1.4.4 (text resize)."
-
-    Returns None when opencv or numpy is unavailable.
+    Uses OpenCV adaptive-threshold + connected-components. The
+    accessibility agent uses the smallest value as ground truth for
+    WCAG 1.4.4 (resize text). Returns ``None`` when opencv / numpy is
+    missing or the image cannot be read.
     """
     try:
         import cv2
         import numpy as np
     except ImportError:
         return None
-
     img = cv2.imread(str(image_path))
     if img is None:
         return None
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Adaptive threshold pulls out text-like high-contrast strokes.
-    th = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 8)
+    th = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 8
+    )
     n, _, stats, _ = cv2.connectedComponentsWithStats(th)
     if n <= 1:
         return None
-    # stats[:, 3] is height (cv2.CC_STAT_HEIGHT). Filter out single-pixel
-    # noise and giant blocks (cards, bars), keep mid-range "text" heights.
     heights = stats[1:, 3]
     plausible = heights[(heights >= 8) & (heights <= 64)]
     if plausible.size == 0:
@@ -287,55 +266,49 @@ def estimate_text_size(image_path: str | Path) -> dict[str, Any] | None:
 
 
 # --------------------------------------------------------------------------- #
-# UX agent tools                                                              #
+# UX agent — cta_density                                                      #
 # --------------------------------------------------------------------------- #
-@register_tool(
-    name="ux.cta_density",
-    owner_agent="ux",
-    description="Estimate above-the-fold CTA count from the visual agent's observations (no LLM call).",
-)
-def cta_density(observations: list[str] | None) -> dict[str, Any] | None:
-    """Crude but useful pre-tool: count CTA-like words in observations.
+@register(owner_agent="ux", alias="ux.cta_density")
+@tool
+def cta_density(observations: list[str] | None = None) -> dict[str, Any] | None:
+    """Count CTA-like phrases in the visual agent's observations.
 
-    The visual agent already reports observations like:
-        "Primary button uses #635BFF, ~64px height"
-        "Two competing CTAs above the fold: 'Start now', 'Talk to sales'"
-
-    We pattern-match for CTA / button / action keywords. The result
-    feeds the UX prompt as: "We counted N CTA-like elements; analyse
-    whether that competes for attention."
+    A 0-LLM heuristic: scans observations for keywords like 'cta',
+    'button', 'sign up', 'start now'. Returns ``None`` when there is
+    no evidence so the UX prompt is not seeded with empty noise.
     """
     if not observations:
         return None
-    keywords = ("cta", "button", "primary action", "call-to-action", "start now", "sign up")
-    count = 0
+    keywords = (
+        "cta",
+        "button",
+        "primary action",
+        "call-to-action",
+        "start now",
+        "sign up",
+    )
     cited: list[str] = []
     for o in observations:
         ol = o.lower()
         if any(k in ol for k in keywords):
-            count += 1
             cited.append(o[:140])
     if not cited:
         return None
-    return {"cta_like_observations": count, "evidence": cited[:5]}
+    return {"cta_like_observations": len(cited), "evidence": cited[:5]}
 
 
 # --------------------------------------------------------------------------- #
-# BRAND agent tools                                                           #
+# Brand agent — palette_distance                                              #
 # --------------------------------------------------------------------------- #
-@register_tool(
-    name="brand.palette_distance",
-    owner_agent="brand",
-    description="Median CIELab distance between candidate palette and reference palette.",
-)
-def palette_distance(candidate_hex: list[str], reference_hex: list[str]) -> dict[str, Any] | None:
-    """Quantify color drift in CIELab Delta-E.
+@register(owner_agent="brand", alias="brand.palette_distance")
+@tool
+def palette_distance(
+    candidate_hex: list[str], reference_hex: list[str]
+) -> dict[str, Any] | None:
+    """Quantify color drift between two palettes using CIELab Delta-E.
 
-    < 5  : imperceptible (same brand)
-    5-12 : noticeable but cohesive
-    > 12 : visible drift, brand off-key
-
-    Returns None when numpy is missing.
+    Verdict thresholds: < 5 imperceptible, 5-12 minor, > 12 off-brand.
+    Returns ``None`` when numpy is missing or either palette is empty.
     """
     try:
         import numpy as np
@@ -343,23 +316,14 @@ def palette_distance(candidate_hex: list[str], reference_hex: list[str]) -> dict
         return None
     if not candidate_hex or not reference_hex:
         return None
-
     cand = np.array([_hex_to_rgb01(h) for h in candidate_hex])
     ref = np.array([_hex_to_rgb01(h) for h in reference_hex])
     cand_lab = _srgb_to_lab(cand)
     ref_lab = _srgb_to_lab(ref)
-
-    # Pairwise distances; take min for each candidate to its closest ref,
-    # then median across candidates. Stable, simple, interpretable.
     d2 = ((cand_lab[:, None, :] - ref_lab[None, :, :]) ** 2).sum(axis=2)
     nearest = np.sqrt(d2.min(axis=1))
     median = float(np.median(nearest))
-    if median < 5:
-        verdict = "on_brand"
-    elif median < 12:
-        verdict = "minor_drift"
-    else:
-        verdict = "off_brand"
+    verdict = "on_brand" if median < 5 else ("minor_drift" if median < 12 else "off_brand")
     return {
         "median_delta_e": round(median, 2),
         "max_delta_e": round(float(nearest.max()), 2),
@@ -367,9 +331,138 @@ def palette_distance(candidate_hex: list[str], reference_hex: list[str]) -> dict
     }
 
 
-def _hex_to_rgb01(h: str) -> tuple[float, float, float]:
-    h = h.lstrip("#")
-    if len(h) == 3:
-        h = "".join(c * 2 for c in h)
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return (r / 255.0, g / 255.0, b / 255.0)
+# --------------------------------------------------------------------------- #
+# Basic tools — file IO + web search                                          #
+# --------------------------------------------------------------------------- #
+# These are the standard tools any agent (or any LangGraph routing
+# node) can opt into. They are intentionally read-only / non-destructive
+# so giving them to a model is safe even on a hostile prompt.
+
+# Sandbox the file tools to a single root so a tool call cannot stray
+# into someone's home directory. Override via FILE_TOOLS_ROOT env var.
+_FILE_ROOT = Path(os.environ.get("FILE_TOOLS_ROOT", str(Path.cwd()))).resolve()
+
+
+def _within_root(p: Path) -> bool:
+    """True iff ``p`` is the file root or a descendant. Symlink-safe."""
+    try:
+        rp = p.resolve()
+    except OSError:
+        return False
+    return rp == _FILE_ROOT or _FILE_ROOT in rp.parents
+
+
+@register(owner_agent="basic")
+@tool
+def read_file(path: str, max_bytes: int = 100_000) -> dict[str, Any]:
+    """Read a small text file from the project sandbox.
+
+    Args:
+        path: Path relative to FILE_TOOLS_ROOT (defaults to cwd).
+        max_bytes: Cap on the returned content (cuts off at this size).
+
+    Returns ``{"path": str, "content": str, "truncated": bool}`` on
+    success or ``{"error": ...}`` on any failure (file missing, outside
+    the sandbox, binary content). NEVER raises.
+    """
+    p = (_FILE_ROOT / path).resolve()
+    if not _within_root(p):
+        return {"error": f"path {path!r} is outside the sandbox"}
+    if not p.exists() or not p.is_file():
+        return {"error": f"file {path!r} not found"}
+    raw = p.read_bytes()
+    truncated = len(raw) > max_bytes
+    if truncated:
+        raw = raw[:max_bytes]
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"error": f"file {path!r} is not utf-8 text"}
+    return {"path": str(p.relative_to(_FILE_ROOT)), "content": text, "truncated": truncated}
+
+
+@register(owner_agent="basic")
+@tool
+def list_files(directory: str = ".", glob: str = "*", max_results: int = 100) -> dict[str, Any]:
+    """List files under ``directory`` matching ``glob``.
+
+    Args:
+        directory: Path relative to FILE_TOOLS_ROOT.
+        glob: Glob pattern (e.g. '*.py', '**/*.md').
+        max_results: Cap the returned list.
+
+    Returns ``{"directory": str, "matches": [str, ...], "truncated": bool}``
+    or ``{"error": ...}``.
+    """
+    root = (_FILE_ROOT / directory).resolve()
+    if not _within_root(root):
+        return {"error": f"directory {directory!r} is outside the sandbox"}
+    if not root.exists() or not root.is_dir():
+        return {"error": f"directory {directory!r} not found"}
+    out: list[str] = []
+    for p in root.glob(glob):
+        if not _within_root(p):
+            continue
+        out.append(str(p.relative_to(_FILE_ROOT)))
+        if len(out) >= max_results:
+            return {"directory": str(root.relative_to(_FILE_ROOT)), "matches": out, "truncated": True}
+    return {"directory": str(root.relative_to(_FILE_ROOT)), "matches": out, "truncated": False}
+
+
+@register(owner_agent="basic")
+@tool
+def web_search(query: str, k: int = 5) -> dict[str, Any]:
+    """Run a web search via the configured provider (Tavily preferred, DuckDuckGo fallback).
+
+    Args:
+        query: Search string.
+        k: Max results.
+
+    Returns ``{"query": str, "results": [{"title": ..., "url": ..., "snippet": ...}, ...]}``.
+    Returns ``{"query": ..., "results": [], "error": ...}`` when the
+    provider fails — the agent then falls back to its editorial list.
+    """
+    try:
+        from src.tools.web_search import get_default_search
+
+        search = get_default_search()
+        if search is None:
+            return {"query": query, "results": [], "error": "no provider configured"}
+        hits = search.search(query, k=k)
+        return {
+            "query": query,
+            "results": [
+                {
+                    "title": h.title,
+                    "url": h.url,
+                    "snippet": h.snippet,
+                }
+                for h in hits
+            ],
+        }
+    except Exception as e:
+        log.warning("web_search tool failed: %s", e)
+        return {"query": query, "results": [], "error": str(e)[:200]}
+
+
+def langchain_tools_summary() -> str:
+    """Return a JSON string describing every registered tool.
+
+    Useful as a one-shot "what tools do we have?" answer for an LLM
+    routing node, and rendered as-is in the docs page.
+    """
+    return json.dumps(
+        [
+            {
+                "name": rt.name,
+                "owner_agent": rt.owner_agent,
+                "description": rt.description,
+            }
+            for rt in list_tools()
+        ],
+        indent=2,
+    )
+
+
+# Math helpers (CIELab / k-means / hex parsing) live in
+# ``src/agents/_color_math.py`` so this file stays under 500 LOC.
