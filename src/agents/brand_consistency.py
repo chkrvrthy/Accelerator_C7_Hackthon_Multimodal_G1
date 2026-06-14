@@ -54,6 +54,7 @@ PROMPT-ITERATION CHECKLIST
 2. The model lists missing-from-the-image references → "ref_ids must come
    from the labels under each image in the composite; do NOT invent ids."
 """
+
 from __future__ import annotations
 
 import argparse

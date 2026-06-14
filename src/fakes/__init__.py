@@ -21,16 +21,17 @@ Use them via ``AgentDeps`` (see ``src/agents/base.build_default_deps``):
 You almost never construct a fake by hand — pytest fixtures in
 ``tests/conftest.py`` do that for you.
 """
+
 from .fake_llm import FakeLLM, FakeVisionLLM
 from .fake_retriever import FakeRetriever
 from .fake_search import FakeSearch
 from .fixtures import SAMPLE_DESIGN, ensure_sample_design
 
 __all__ = [
+    "SAMPLE_DESIGN",
     "FakeLLM",
-    "FakeVisionLLM",
     "FakeRetriever",
     "FakeSearch",
-    "SAMPLE_DESIGN",
+    "FakeVisionLLM",
     "ensure_sample_design",
 ]

@@ -41,11 +41,11 @@ DO NOT
 - Do not leak ``Settings`` into agent code. Read ``deps.cfg`` instead so
   test monkeypatches work.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -85,6 +85,7 @@ def build_default_deps(use_real: bool | None = None) -> AgentDeps:
     if not real:
         # Offline path — every fake is import-cheap.
         from src.fakes import FakeLLM, FakeRetriever, FakeSearch, FakeVisionLLM
+
         return AgentDeps(
             llm=FakeLLM(),
             vision=FakeVisionLLM(),

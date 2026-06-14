@@ -3,6 +3,7 @@
 This test only runs when ``OPENROUTER_API_KEY`` is set in the environment.
 Locally and in CI without keys it is auto-skipped by ``conftest.py``.
 """
+
 from __future__ import annotations
 
 import pytest

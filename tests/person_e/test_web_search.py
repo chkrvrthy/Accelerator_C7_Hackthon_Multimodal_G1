@@ -1,4 +1,5 @@
 """WebSearch — fake works; real Tavily is gated by ``real_api``."""
+
 from __future__ import annotations
 
 import sys

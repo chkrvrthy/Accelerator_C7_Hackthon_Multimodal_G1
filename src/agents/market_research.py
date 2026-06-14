@@ -48,6 +48,7 @@ PROMPT-ITERATION CHECKLIST
 3. Empty research_queries → "list 3 follow-up Google queries the team
    should run; phrase them as Google searches, not full sentences."
 """
+
 from __future__ import annotations
 
 import argparse
@@ -93,7 +94,7 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, MarketResearch]:
         agent_name="agent.market",
         system=market_research_system(),
         user=user_text,
-        images=[],          # text-only call
+        images=[],  # text-only call
         schema=MarketResearch,
         deps=deps,
     )

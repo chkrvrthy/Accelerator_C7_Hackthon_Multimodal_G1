@@ -6,6 +6,7 @@ SPRINT CONCEPTS:
 CONSUMES: ``tavily-python``, ``duckduckgo-search``.
 PROVIDES: ``TavilySearch``, ``DuckDuckGoSearch``, ``get_default_search``.
 """
+
 from __future__ import annotations
 
 import hashlib

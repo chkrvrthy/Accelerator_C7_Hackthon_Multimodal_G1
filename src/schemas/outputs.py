@@ -42,11 +42,12 @@ HINTS
 - Every list field gets ``default_factory=list`` so a partial state still
   validates while agents are still running.
 """
+
 from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -151,8 +152,8 @@ class AccessibilityReport(BaseModel):
 
     wcag_findings: list[WCAGFinding] = Field(default_factory=list)
     # contrast_pass is None when the LLM was unsure and no opencv pass ran.
-    contrast_pass: Optional[bool] = None
-    est_min_touch_target_px: Optional[int] = Field(
+    contrast_pass: bool | None = None
+    est_min_touch_target_px: int | None = Field(
         default=None, description="Smallest tappable element height in px (estimate)."
     )
 
@@ -231,11 +232,11 @@ class DesignReport(BaseModel):
     top_strengths: list[str] = Field(default_factory=list)
     top_recommendations: list[Recommendation] = Field(default_factory=list)
 
-    visual: Optional[VisualAnalysis] = None
-    ux: Optional[UXCritique] = None
-    accessibility: Optional[AccessibilityReport] = None
-    market: Optional[MarketResearch] = None
-    brand: Optional[BrandConsistency] = None
+    visual: VisualAnalysis | None = None
+    ux: UXCritique | None = None
+    accessibility: AccessibilityReport | None = None
+    market: MarketResearch | None = None
+    brand: BrandConsistency | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -257,13 +258,13 @@ class GraphState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     image_path: str
-    image_b64: Optional[str] = None
-    instructions: Optional[str] = None
+    image_b64: str | None = None
+    instructions: str | None = None
 
-    visual: Optional[VisualAnalysis] = None
-    ux: Optional[UXCritique] = None
-    accessibility: Optional[AccessibilityReport] = None
-    market: Optional[MarketResearch] = None
-    brand: Optional[BrandConsistency] = None
+    visual: VisualAnalysis | None = None
+    ux: UXCritique | None = None
+    accessibility: AccessibilityReport | None = None
+    market: MarketResearch | None = None
+    brand: BrandConsistency | None = None
 
-    report: Optional[DesignReport] = None
+    report: DesignReport | None = None

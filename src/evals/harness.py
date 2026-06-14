@@ -15,6 +15,7 @@ Free-text "LLM-as-judge" scoring is documented as a post-MVP stretch. If you
 have spare time on Day 2, plug it in by replacing ``schema_valid`` with a
 ``judge_score`` that asks a second LLM "rate this finding on rubric XYZ".
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -65,12 +66,12 @@ _FIELD_TO_SCHEMA: dict[str, type[BaseModel]] = {
 }
 
 
-def run_eval(case: "GoldenCase", deps: AgentDeps | None = None) -> EvalResult:
+def run_eval(case: GoldenCase, deps: AgentDeps | None = None) -> EvalResult:
     """Run the graph on ``case`` and check schema validity per agent."""
     deps = deps or build_default_deps()
     try:
         report: DesignReport = run_graph(case.image_path, instructions=case.instructions, deps=deps)
-    except Exception as e:  # noqa: BLE001 — eval should not crash the run
+    except Exception as e:
         log.error("eval.run_eval failed for %s: %s", case.name, e)
         return EvalResult(case_name=case.name, error=str(e), pass_rate=0.0)
 
@@ -83,7 +84,7 @@ def run_eval(case: "GoldenCase", deps: AgentDeps | None = None) -> EvalResult:
         try:
             schema.model_validate(obj.model_dump())
             valid[field] = True
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # LOGIC: in evals we deliberately keep going on a single bad
             # field — but the operator should see *which* one failed.
             log.warning("eval %s: %s failed schema check: %s", case.name, field, e)

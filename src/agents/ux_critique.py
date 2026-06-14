@@ -55,6 +55,7 @@ PROMPT-ITERATION CHECKLIST
 3. Hallucinated UI elements → "if you cannot see it in the screenshot, do
    not mention it. Quote what you see verbatim."
 """
+
 from __future__ import annotations
 
 import argparse

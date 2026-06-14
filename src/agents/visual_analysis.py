@@ -54,6 +54,7 @@ PROMPT-ITERATION CHECKLIST (where most of your time goes)
 4. ``density_score`` always pegged at 80 → add anchor examples in the prompt
    ("blank page = 0, busy stock-trading dashboard = 90").
 """
+
 from __future__ import annotations
 
 import argparse

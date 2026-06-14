@@ -32,6 +32,7 @@ DO NOT
 - Do not catch exceptions silently. If the retriever raises, the LLM should
   see the error string.
 """
+
 from __future__ import annotations
 
 import json

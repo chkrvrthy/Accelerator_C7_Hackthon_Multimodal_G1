@@ -8,6 +8,7 @@ eval is 30 model calls. With caching we can re-run instantly on subsequent
 passes, but the first pass costs money. Five hand-picked screenshots that
 together exercise every code path is the right hackathon trade-off.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

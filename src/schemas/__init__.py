@@ -6,6 +6,7 @@ Why this file exists:
     ``from src.schemas import DesignReport`` instead of repeating the long
     submodule path. One import line, less typing, easier refactors.
 """
+
 from .outputs import (
     AccessibilityReport,
     BrandConsistency,

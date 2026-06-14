@@ -46,6 +46,7 @@ PROMPT-ITERATION CHECKLIST
 3. Vague evidence ("text is hard to read") → "quote the visible text verbatim
    and estimate font size in px from the image."
 """
+
 from __future__ import annotations
 
 import argparse

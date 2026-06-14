@@ -4,9 +4,11 @@ These tests guard the SHAPE of the data flowing between modules. If anyone
 adds a required field to a Pydantic model without updating fakes, these
 tests catch it before the demo.
 """
+
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from src.schemas.outputs import (
     AccessibilityReport,
@@ -46,7 +48,7 @@ def test_visual_analysis_drops_empty_palette_strings():
 
 
 def test_score_bounds_enforced():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         VisualAnalysis(density_score=150.0)
 
 
@@ -87,7 +89,7 @@ def test_wcag_finding_requires_numeric_criterion():
 
 
 def test_wcag_finding_rejects_bad_criterion():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         WCAGFinding(
             title="t",
             description="d",

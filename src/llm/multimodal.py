@@ -49,6 +49,7 @@ Always resize. The ``side_by_side`` helper in ``tools.image_utils`` lets
 you pack four references into one image — one upload, one charge, four
 comparisons.
 """
+
 from __future__ import annotations
 
 import base64
@@ -107,6 +108,7 @@ def encode_image_to_data_url(path: Path | str) -> str:
     # operator notices.
     try:
         from PIL import Image, ImageOps  # type: ignore[import-not-found]
+
         img = ImageOps.exif_transpose(Image.open(p)).convert("RGB")
         w, h = img.size
         scale = _MAX_IMAGE_SIDE / max(w, h)
@@ -148,7 +150,11 @@ def vision_message(prompt: str, images: list[Path | str]) -> list[dict[str, Any]
     """
     parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
     for img in images:
-        url = img if isinstance(img, str) and img.startswith("data:") else encode_image_to_data_url(img)
+        url = (
+            img
+            if isinstance(img, str) and img.startswith("data:")
+            else encode_image_to_data_url(img)
+        )
         parts.append({"type": "image_url", "image_url": {"url": url}})
     return [{"role": "user", "content": parts}]
 

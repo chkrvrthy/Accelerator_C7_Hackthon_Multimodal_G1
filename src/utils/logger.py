@@ -12,6 +12,7 @@ and per-slice runners work even before ``pip install`` is fully done.
 
 OWNER: Person A (already on disk; do not modify casually)
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ _CONFIGURED = False
 
 try:
     from loguru import logger as _loguru_logger  # type: ignore[import-not-found]
+
     _HAS_LOGURU = True
 except ImportError:  # graceful degrade
     _loguru_logger = None  # type: ignore[assignment]

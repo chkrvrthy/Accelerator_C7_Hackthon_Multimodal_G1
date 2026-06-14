@@ -1,4 +1,5 @@
 """Ingest CLI pipeline tests without loading CLIP or LanceDB."""
+
 from __future__ import annotations
 
 import os

@@ -21,6 +21,7 @@ If the visual agent suddenly returns ``palette`` as a string instead of a
 list, this script catches it. Free-text "LLM-as-judge" scoring is the
 post-MVP stretch — replace ``schema_valid`` with a rubric score later.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,15 +43,20 @@ def main() -> int:
 
     summary = aggregate(results)
     # NOTE: this JSON dump is the artifact judges screenshot. Keep it stable.
-    print(json.dumps(
-        {
-            "summary": summary.model_dump(),
-            "results": [r.model_dump() for r in results],
-        },
-        indent=2,
-    ))
-    log.info("eval: overall pass-rate = %.1f%% over %d cases",
-             summary.overall_pass_rate * 100, summary.total_cases)
+    print(
+        json.dumps(
+            {
+                "summary": summary.model_dump(),
+                "results": [r.model_dump() for r in results],
+            },
+            indent=2,
+        )
+    )
+    log.info(
+        "eval: overall pass-rate = %.1f%% over %d cases",
+        summary.overall_pass_rate * 100,
+        summary.total_cases,
+    )
     # HINT: 0.8 is the demo threshold. Raise to 0.95 once prompts stabilize.
     return 0 if summary.overall_pass_rate >= 0.8 else 1
 

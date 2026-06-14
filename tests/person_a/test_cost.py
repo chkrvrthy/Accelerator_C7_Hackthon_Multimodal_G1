@@ -1,4 +1,5 @@
 """Cost layer — hash determinism + select_model contract."""
+
 from __future__ import annotations
 
 import pytest
