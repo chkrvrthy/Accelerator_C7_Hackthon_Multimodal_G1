@@ -54,17 +54,26 @@ DO NOT
 """
 from __future__ import annotations
 
+import json
+import random
+import time
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.config import Settings, settings
+from src.llm.cost import cached
 from src.utils.logger import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from openai import OpenAI
 
 log = get_logger(__name__)
+
+# LOGIC: only retry on transient transport-layer errors. Auth / 4xx are
+# user-actionable and re-raise immediately so the operator sees them.
+_RETRYABLE_OPENAI_ERRORS = ("RateLimitError", "APIConnectionError", "APITimeoutError")
+_MAX_RETRIES = 3
 
 
 class OpenRouterClient:
@@ -79,6 +88,7 @@ class OpenRouterClient:
     # ------------------------------------------------------------------
     # Public API (LLMClient protocol)
     # ------------------------------------------------------------------
+    @cached
     def complete(
         self,
         *,
@@ -102,88 +112,150 @@ class OpenRouterClient:
             A validated instance of ``schema``.
 
         Raises:
-            ValueError: when the model returns malformed JSON.
-            openai.OpenAIError: on transport / auth / rate-limit failures.
+            ValueError: when the model returns malformed JSON we cannot recover from.
+            openai.OpenAIError: on transport / auth / rate-limit failures
+                (after exhausting retries).
         """
-        # HINT: the call sequence is exactly five steps. Resist adding more.
-        #   1. ``messages = [{"role":"system","content":system}, {"role":"user","content":user}]``
-        #   2. ``rf = self._schema_payload(schema)`` (helper below)
-        #   3. ``resp = self._client().chat.completions.create(model=..., messages=messages,``
-        #      ``response_format=rf, temperature=temperature or self.settings.default_temperature,``
-        #      ``max_tokens=self.settings.default_max_tokens)``
-        #   4. ``raw = resp.choices[0].message.content``  (always a JSON string in this mode)
-        #   5. ``return schema.model_validate_json(raw)``
-        #
-        # HINT: wrap step 3 with ``cost.cached`` once cost.py is real:
-        #     return _cached_complete(system=..., user=..., schema=..., model=...)
-        # The cache key is built from your inputs; do NOT include trace ids.
-        #
-        # HINT: rate-limit handling — only on RateLimitError, not on every
-        # OpenAIError:
-        #     for attempt in range(3):
-        #         try: return ...
-        #         except openai.RateLimitError:
-        #             time.sleep(1.5 ** attempt + random.random() * 0.2)
-        #     raise  # exhausted retries
-        #
-        # HINT: when a provider rejects ``json_schema`` (rare but real), retry
-        # ONCE with ``response_format={"type":"json_object"}`` and pass a
-        # textual schema description in the system prompt. Catch
-        # ``openai.BadRequestError`` and inspect ``e.body["error"]["message"]``.
-        # TODO(person-a): wire steps 1–5 above. ~25 lines.
-        raise NotImplementedError("Person A: implement OpenRouterClient.complete")
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        return self._chat_with_schema(
+            messages=messages,
+            schema=schema,
+            model=model or self.settings.default_text_model,
+            temperature=temperature if temperature is not None else self.settings.default_temperature,
+        )
+
+    # ------------------------------------------------------------------
+    # Shared chat-with-schema worker (used by complete + by multimodal)
+    # ------------------------------------------------------------------
+    def _chat_with_schema(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        schema: type[BaseModel],
+        model: str,
+        temperature: float | None = None,
+    ) -> BaseModel:
+        """Core call. Handles retries + json_schema → json_object fallback.
+
+        Public-API consumers call ``complete`` (text) or ``OpenRouterVision.analyze``
+        (multimodal); this method is shared so retry / fallback / validation logic
+        is in exactly one place.
+        """
+        rf = self._schema_payload(schema)
+        last_exc: Exception | None = None
+
+        for attempt in range(_MAX_RETRIES):
+            try:
+                resp = self._client().chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    response_format=rf,
+                    temperature=temperature,
+                    max_tokens=self.settings.default_max_tokens,
+                )
+                raw = resp.choices[0].message.content or ""
+                return self._validate_or_fallback(raw, schema)
+
+            except Exception as e:
+                last_exc = e
+                # LOGIC: only retry on transient transport errors. Auth / 4xx
+                # are user-actionable and surface immediately.
+                if type(e).__name__ in _RETRYABLE_OPENAI_ERRORS and attempt < _MAX_RETRIES - 1:
+                    delay = (1.5 ** attempt) + random.random() * 0.2
+                    log.warning("openrouter: %s on attempt %d/%d, retrying in %.1fs",
+                                type(e).__name__, attempt + 1, _MAX_RETRIES, delay)
+                    time.sleep(delay)
+                    continue
+                # LOGIC: providers occasionally reject the strict json_schema mode;
+                # downgrade ONCE to plain json_object before giving up.
+                if type(e).__name__ == "BadRequestError" and rf["type"] == "json_schema":
+                    log.warning("openrouter: json_schema rejected, retrying with json_object")
+                    rf = {"type": "json_object"}
+                    messages = self._inject_schema_hint(messages, schema)
+                    continue
+                raise
+
+        assert last_exc is not None
+        raise last_exc
 
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
     def _client(self) -> OpenAI:
-        """Lazy-construct the OpenAI SDK with OpenRouter base URL + headers.
-
-        HINT: lazy so importing this module is cheap even when no key is set.
-        Other slices (Person B, C, D) load this file just to type-check —
-        a non-lazy SDK construction would force them to install ``openai``.
-        """
-        # TODO(person-a): one-liner build, cached on self._sdk:
-        #   from openai import OpenAI
-        #   if self._sdk is None:
-        #       self._sdk = OpenAI(
-        #           api_key=self.settings.openrouter_api_key,
-        #           base_url=self.settings.openrouter_base_url,
-        #           default_headers={
-        #               "HTTP-Referer": self.settings.openrouter_site_url,
-        #               "X-Title": self.settings.openrouter_app_name,
-        #           },
-        #       )
-        #   return self._sdk
-        #
-        # HINT: missing ``OPENROUTER_API_KEY`` should raise a clear error here,
-        # not deep inside the SDK at first call:
-        #     if not self.settings.openrouter_api_key:
-        #         raise RuntimeError("OPENROUTER_API_KEY is not set in .env")
-        raise NotImplementedError
+        """Lazy-construct the OpenAI SDK with OpenRouter base URL + headers."""
+        if self._sdk is not None:
+            return self._sdk
+        if not self.settings.openrouter_api_key:
+            raise RuntimeError(
+                "OPENROUTER_API_KEY is not set. Either export it, set it in .env, "
+                "or run with USE_REAL=0 to use the FakeLLM."
+            )
+        # LOGIC: lazy import keeps non-Person-A slices import-cheap. Other
+        # owners type-check this module without needing the openai SDK.
+        from openai import OpenAI
+        self._sdk = OpenAI(
+            api_key=self.settings.openrouter_api_key,
+            base_url=self.settings.openrouter_base_url,
+            default_headers={
+                "HTTP-Referer": self.settings.openrouter_site_url,
+                "X-Title": self.settings.openrouter_app_name,
+            },
+        )
+        return self._sdk
 
     @staticmethod
     def _schema_payload(schema: type[BaseModel]) -> dict[str, Any]:
         """Build the OpenRouter ``response_format`` payload for a Pydantic model.
 
-        Returns the dict you pass as ``response_format=...`` to the SDK.
+        ``strict: True`` makes the model emit *only* JSON; without it providers
+        occasionally add prose that breaks ``model_validate_json``.
         """
-        # HINT: the OpenRouter spec accepts the following shape:
-        #   {
-        #       "type": "json_schema",
-        #       "json_schema": {
-        #           "name": schema.__name__,
-        #           "schema": schema.model_json_schema(),
-        #           "strict": True,
-        #       },
-        #   }
-        # ``strict: True`` makes the model emit *only* JSON; without it the
-        # model occasionally adds prose that breaks model_validate_json.
-        #
-        # LOGIC: pydantic v2's ``model_json_schema()`` already produces a
-        # JSON-Schema-compliant dict — no transformation needed.
-        # TODO(person-a): build and return the dict.
-        raise NotImplementedError
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema.__name__,
+                "schema": schema.model_json_schema(),
+                "strict": True,
+            },
+        }
+
+    @staticmethod
+    def _inject_schema_hint(
+        messages: list[dict[str, Any]], schema: type[BaseModel]
+    ) -> list[dict[str, Any]]:
+        """Append the JSON schema as a textual hint when falling back to json_object."""
+        # LOGIC: in fallback mode the SDK only gets `{"type":"json_object"}`,
+        # no schema. So we paste the schema into the system prompt.
+        out = [dict(m) for m in messages]
+        if out and out[0].get("role") == "system":
+            sys_content = out[0].get("content", "") or ""
+            schema_blob = json.dumps(schema.model_json_schema())
+            out[0]["content"] = (
+                f"{sys_content}\n\nReturn ONLY a JSON object that conforms to this schema:\n{schema_blob}"
+            )
+        return out
+
+    @staticmethod
+    def _validate_or_fallback(raw: str, schema: type[BaseModel]) -> BaseModel:
+        """Validate JSON; if the model wrapped it in markdown, strip and retry once."""
+        if not raw:
+            raise ValueError(f"OpenRouter returned empty content for {schema.__name__}")
+        try:
+            return schema.model_validate_json(raw)
+        except ValidationError:
+            # LOGIC: occasional provider drift wraps JSON in ```json ... ```.
+            # Strip code fences and retry ONCE before giving up.
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```", 2)[-1].strip()
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:].strip()
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3].strip()
+            return schema.model_validate_json(cleaned)
 
 
 def get_openrouter_client() -> OpenRouterClient:

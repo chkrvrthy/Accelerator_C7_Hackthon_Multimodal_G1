@@ -52,6 +52,7 @@ from pydantic import BaseModel
 from src.config import Settings, settings
 from src.contracts import LLMClient, Retriever, VisionLLM, WebSearch
 from src.utils.logger import get_logger
+from src.utils.tracing import traced
 
 log = get_logger(__name__)
 
@@ -136,19 +137,20 @@ def run_with_schema(
     # do it at the GRAPH level (after this function), not inside it.
     n_images = len(images) if images else 0
     log.info("%s: starting (schema=%s, images=%d)", agent_name, schema.__name__, n_images)
-    try:
-        if images:
-            result = deps.vision.analyze(
-                system=system, user=user, images=list(images), schema=schema
-            )
-        else:
-            result = deps.llm.complete(system=system, user=user, schema=schema)
-    except Exception as e:
-        # LOGIC: log the exception at ERROR (always visible), then re-raise.
-        # The graph layer (or fallback orchestrator) decides retry / skip.
-        log.error("%s: failed: %s: %s", agent_name, type(e).__name__, e)
-        raise
+    # LOGIC: every agent call is wrapped in a LangSmith span. With no key,
+    # ``traced`` is a near-zero-cost log.debug no-op (see src/utils/tracing.py).
+    with traced(agent_name, schema=schema.__name__, images=n_images):
+        try:
+            if images:
+                result = deps.vision.analyze(
+                    system=system, user=user, images=list(images), schema=schema
+                )
+            else:
+                result = deps.llm.complete(system=system, user=user, schema=schema)
+        except Exception as e:
+            # LOGIC: log the exception at ERROR (always visible), then re-raise.
+            # The graph layer (or fallback orchestrator) decides retry / skip.
+            log.error("%s: failed: %s: %s", agent_name, type(e).__name__, e)
+            raise
     log.info("%s: ok (%s)", agent_name, schema.__name__)
-    # TODO(person-a): wrap with traced(name=agent_name) once tracing.py is
-    # wired so LangSmith shows five spans starting on the same timeline.
     return result

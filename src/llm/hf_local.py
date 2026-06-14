@@ -40,6 +40,7 @@ POST-MVP (if you have spare time on Day 2)
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from pydantic import BaseModel
@@ -49,10 +50,33 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 
+def _extract_json(text: str) -> str:
+    """Return the first balanced ``{...}`` substring in ``text``.
+
+    Small models often wrap JSON in prose ("Here you go:\n{...}\n"). This
+    helper hunts the first balanced object so ``model_validate_json`` does not
+    explode on the surrounding prose.
+    """
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start != -1:
+                return text[start : i + 1]
+    raise ValueError("HFLocalClient: no balanced JSON object found in model output")
+
+
 class HFLocalClient:
     """``LLMClient`` backed by a local HuggingFace transformers pipeline.
 
-    Concept-coverage file. Not used by any agent on the critical path.
+    Concept-coverage file. Not used by any agent on the critical path. Stays
+    completely lazy — importing this module does NOT pull torch / transformers
+    into memory. The first ``.complete()`` call is what triggers download.
     """
 
     def __init__(self, model_id: str = "Qwen/Qwen2.5-0.5B-Instruct") -> None:
@@ -72,9 +96,10 @@ class HFLocalClient:
                 "transformers is not installed. For Sprint 2 HuggingFace coverage:\n"
                 "    pip install -r requirements/optional-hf.txt"
             ) from e
-        # HINT: device_map="auto" picks GPU if available; "cpu" forces CPU.
-        # For the concept-claim demo, "cpu" is enough and predictable.
-        # TODO(person-a, optional): self._pipe = pipeline("text-generation", model=self.model_id, device_map="cpu")
+        log.info("HFLocalClient: loading %s on CPU (first call may take ~30s)", self.model_id)
+        # LOGIC: device_map left as the library default (CPU on most boxes).
+        # Forcing "cpu" via device_map is fine but breaks the helpful auto-
+        # detection on machines with MPS / CUDA available for ad-hoc demos.
         self._pipe = pipeline("text-generation", model=self.model_id)
         return self._pipe
 
@@ -84,25 +109,28 @@ class HFLocalClient:
         system: str,
         user: str,
         schema: type[BaseModel],
-        model: str | None = None,
+        model: str | None = None,  # noqa: ARG002 — kept for protocol compatibility
         temperature: float | None = None,
     ) -> BaseModel:
-        # HINT: minimal recipe (~10 lines) that judges will believe:
-        #   pipe = self._ensure_pipeline()
-        #   schema_blob = json.dumps(schema.model_json_schema())
-        #   prompt = (
-        #       f"<|system|>{system}\nReturn ONLY a JSON object matching this schema:\n"
-        #       f"{schema_blob}<|user|>{user}<|assistant|>"
-        #   )
-        #   out = pipe(prompt, max_new_tokens=512, do_sample=False)[0]["generated_text"]
-        #   raw = out[out.rindex("<|assistant|>") + len("<|assistant|>"):]
-        #   return schema.model_validate_json(_extract_json(raw))
-        #
-        # HINT: small models often emit prose around the JSON. Write a small
-        # ``_extract_json(text: str) -> str`` helper that returns the first
-        # balanced ``{...}`` substring. Do not import a JSON-fixer library.
-        #
-        # NOTE: a clear failure message ("model emitted invalid JSON") is fine.
-        # This is a concept claim, not production. Judges check it exists.
-        # TODO(person-a, post-MVP): wire the recipe above when time permits.
-        raise NotImplementedError("HFLocalClient is a Sprint 2 concept stub.")
+        """Run the local model and validate JSON against ``schema``.
+
+        Concept-claim quality only — this path is intentionally simple and
+        does NOT compete with OpenRouter on accuracy.
+        """
+        pipe = self._ensure_pipeline()
+        schema_blob = json.dumps(schema.model_json_schema())
+        prompt = (
+            f"<|system|>\n{system}\n"
+            f"Return ONLY a JSON object matching this schema:\n{schema_blob}\n"
+            f"<|user|>\n{user}\n"
+            f"<|assistant|>\n"
+        )
+        out = pipe(
+            prompt,
+            max_new_tokens=512,
+            do_sample=temperature is not None and temperature > 0,
+            temperature=temperature or 0.0,
+            return_full_text=False,
+        )
+        raw = out[0]["generated_text"]
+        return schema.model_validate_json(_extract_json(raw))

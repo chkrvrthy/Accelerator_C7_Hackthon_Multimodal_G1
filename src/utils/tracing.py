@@ -47,13 +47,26 @@ from __future__ import annotations
 
 import contextlib
 import os
+import uuid
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Any
 
 from src.config import settings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _tracing_enabled() -> bool:
+    """Return True iff LangSmith env vars are present AND the SDK is installed."""
+    if not settings.langchain_tracing_v2 or not settings.langchain_api_key:
+        return False
+    try:
+        import langsmith  # noqa: F401  — presence check only
+    except ImportError:
+        return False
+    return True
 
 
 def init_tracing() -> bool:
@@ -80,32 +93,78 @@ def init_tracing() -> bool:
 def traced(name: str, **metadata: Any) -> Iterator[None]:
     """Wrap a block as a LangSmith run; log locally if no key.
 
-    Usage:
+    With ``LANGCHAIN_TRACING_V2=true`` and a valid key, this pushes an
+    *explicit* run via ``langsmith.Client().create_run`` so non-LangChain
+    code paths (LanceRetriever search, MCP tool calls, etc.) appear in the
+    LangSmith UI alongside the auto-traced LangGraph nodes.
+
+    With no key, this is a near-zero-cost ``log.debug`` no-op.
+
+    Usage::
+
         with traced("agent.visual", image=path):
-            return await deps.vision.analyze(...)
+            return deps.vision.analyze(...)
     """
     log.debug("trace.start name=%s meta=%s", name, metadata)
-    # HINT: explicit-run recipe for non-LangChain code (post-MVP):
-    #
-    #   from langsmith import Client
-    #   client = Client()
-    #   run = client.create_run(name=name, run_type="chain",
-    #                           inputs={"metadata": metadata}, project_name=settings.langchain_project)
-    #   try:
-    #       yield
-    #       client.update_run(run.id, outputs={"status": "ok"}, end_time=datetime.utcnow())
-    #   except Exception as e:
-    #       client.update_run(run.id, error=str(e), end_time=datetime.utcnow())
-    #       raise
-    #
-    # NOTE: keep the no-key path fast — log.debug is right; do not log.info
-    # because every agent call would emit a line.
+
+    if not _tracing_enabled():
+        # LOGIC: keep the no-key path cheap. log.debug — not info — so we
+        # don't add a line per agent call to the operator's stderr.
+        try:
+            yield
+        finally:
+            log.debug("trace.end   name=%s", name)
+        return
+
+    # LOGIC: import here so the no-key path never pays the import cost.
     try:
-        # TODO(person-a, post-MVP): when langsmith is installed and a key
-        # is set, push an explicit run so non-LangChain spans (LanceRetriever,
-        # TavilySearch) show up too. For v1 we rely on LangChain's automatic
-        # tracing of LangGraph nodes, which kicks in once init_tracing()
-        # has exported the env vars.
+        from langsmith import Client  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            yield
+        finally:
+            log.debug("trace.end   name=%s", name)
+        return
+
+    run_id = uuid.uuid4()
+    started = datetime.now(timezone.utc)
+    client: Any | None = None
+    try:
+        client = Client()
+        client.create_run(
+            id=run_id,
+            name=name,
+            run_type="chain",
+            inputs={"metadata": metadata} if metadata else {},
+            project_name=settings.langchain_project,
+            start_time=started,
+        )
+    except Exception as e:  # noqa: BLE001 — never let tracing break the run.
+        log.warning("trace.start failed for %s: %s", name, e)
+        client = None
+
+    try:
         yield
+    except Exception as e:
+        if client is not None:
+            try:
+                client.update_run(
+                    run_id,
+                    error=f"{type(e).__name__}: {e}",
+                    end_time=datetime.now(timezone.utc),
+                )
+            except Exception as ue:  # noqa: BLE001
+                log.warning("trace.update (error path) failed for %s: %s", name, ue)
+        raise
+    else:
+        if client is not None:
+            try:
+                client.update_run(
+                    run_id,
+                    outputs={"status": "ok"},
+                    end_time=datetime.now(timezone.utc),
+                )
+            except Exception as ue:  # noqa: BLE001
+                log.warning("trace.update (ok path) failed for %s: %s", name, ue)
     finally:
         log.debug("trace.end   name=%s", name)

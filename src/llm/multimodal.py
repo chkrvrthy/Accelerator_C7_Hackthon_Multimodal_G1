@@ -51,42 +51,82 @@ comparisons.
 """
 from __future__ import annotations
 
+import base64
+import mimetypes
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
 from src.config import settings
-from src.contracts import VisionLLM  # noqa: F401  — declared for clarity
+from src.llm.cost import cached
 from src.llm.openrouter_client import OpenRouterClient
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
+_SUPPORTED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+# Token-cost discipline: cap upload dimension. 1024 px max side is universal
+# across providers and keeps token cost predictable (~700 tokens / image).
+_MAX_IMAGE_SIDE = 1024
+
 
 def encode_image_to_data_url(path: Path | str) -> str:
     """Read an image file and return ``data:image/<fmt>;base64,...``.
 
+    The image is automatically resized so its longest side is at most
+    ``_MAX_IMAGE_SIDE`` (1024 px) — keeps demo costs predictable. EXIF
+    rotation is applied so phone screenshots come out upright.
+
+    Args:
+        path: Either a filesystem path OR an already-formatted ``data:`` URI
+              (returned unchanged so callers can mix the two cheaply).
+
     Raises:
-        FileNotFoundError: if the path does not exist.
-        ValueError: if the suffix is not in the supported set.
+        FileNotFoundError: when the path does not exist.
+        ValueError: when the suffix is not in the supported set.
     """
-    # HINT: supported = {".png", ".jpg", ".jpeg", ".webp"}. Anything else
-    # we either reject or pre-convert via PIL — pick one and document it
-    # in the docstring above.
-    #
-    # TODO(person-a): five lines:
-    #   import base64, mimetypes
-    #   p = Path(path)
-    #   if not p.exists(): raise FileNotFoundError(p)
-    #   mime = mimetypes.guess_type(p.name)[0] or "image/png"
-    #   b64 = base64.b64encode(p.read_bytes()).decode()
-    #   return f"data:{mime};base64,{b64}"
-    #
-    # HINT: use ``tools.image_utils.resize_max_side`` BEFORE encoding:
-    #     img = load_image(p); img = resize_max_side(img, 1024); return to_data_url(img)
-    # That keeps token cost predictable.
-    raise NotImplementedError("Person A: implement encode_image_to_data_url")
+    # LOGIC: pass-through for already-encoded inputs. Useful when the caller
+    # composited multiple references with side_by_side and wants to skip a
+    # round-trip through the filesystem.
+    if isinstance(path, str) and path.startswith("data:"):
+        return path
+
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"image not found: {p}")
+    if p.suffix.lower() not in _SUPPORTED_SUFFIXES:
+        raise ValueError(
+            f"unsupported image suffix {p.suffix!r}; supported: {sorted(_SUPPORTED_SUFFIXES)}"
+        )
+
+    # LOGIC: try the resize path first. If Pillow is missing (Person C/D
+    # might run a partial install during dev), fall back to raw bytes — the
+    # provider will accept it but cost more tokens. Warn loudly so the
+    # operator notices.
+    try:
+        from PIL import Image, ImageOps  # type: ignore[import-not-found]
+        img = ImageOps.exif_transpose(Image.open(p)).convert("RGB")
+        w, h = img.size
+        scale = _MAX_IMAGE_SIDE / max(w, h)
+        if scale < 1.0:
+            img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        buf = BytesIO()
+        # LOGIC: PNG round-trips lossless and preserves diagram crispness;
+        # screenshots with smooth gradients would benefit from JPEG, but the
+        # quality risk on UI-text legibility is not worth the savings for v1.
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/png;base64,{b64}"
+    except ImportError:
+        log.warning(
+            "Pillow not installed — sending image at full resolution. "
+            "Install requirements/base.txt to enable resize-and-cost-discipline."
+        )
+        mime = mimetypes.guess_type(p.name)[0] or "image/png"
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        return f"data:{mime};base64,{b64}"
 
 
 def vision_message(prompt: str, images: list[Path | str]) -> list[dict[str, Any]]:
@@ -94,9 +134,11 @@ def vision_message(prompt: str, images: list[Path | str]) -> list[dict[str, Any]
 
     Returns a list with a SINGLE ``user`` message whose ``content`` is an
     interleaved list of ``{"type":"text",...}`` and ``{"type":"image_url",...}``
-    parts.
+    parts. Text part first; image parts after. Some providers are order-
+    sensitive to that convention.
 
-    Example shape (what the SDK expects):
+    Example shape::
+
         [
             {"role": "user", "content": [
                 {"type": "text", "text": prompt},
@@ -104,17 +146,11 @@ def vision_message(prompt: str, images: list[Path | str]) -> list[dict[str, Any]
             ]}
         ]
     """
-    # LOGIC: text part first, image parts after. Some providers order-sensitive
-    # to the text-before-image convention; do not swap.
-    #
-    # HINT: list-comp + spread:
-    #   parts = [{"type": "text", "text": prompt}]
-    #   for img in images:
-    #       url = img if isinstance(img, str) and img.startswith("data:") else encode_image_to_data_url(img)
-    #       parts.append({"type": "image_url", "image_url": {"url": url}})
-    #   return [{"role": "user", "content": parts}]
-    # TODO(person-a): build and return the messages list.
-    raise NotImplementedError("Person A: implement vision_message")
+    parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+    for img in images:
+        url = img if isinstance(img, str) and img.startswith("data:") else encode_image_to_data_url(img)
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return [{"role": "user", "content": parts}]
 
 
 class OpenRouterVision:
@@ -125,6 +161,7 @@ class OpenRouterVision:
         # across vision and text calls in the same process.
         self.llm = llm or OpenRouterClient()
 
+    @cached
     def analyze(
         self,
         *,
@@ -139,34 +176,34 @@ class OpenRouterVision:
         Args:
             system: System prompt.
             user: User text accompanying the image(s).
-            images: 1+ image paths or data URIs.
+            images: 1+ image paths or already-formatted data URIs.
             schema: Pydantic schema to enforce.
             model: Optional vision-capable model id; default from settings.
 
         Returns:
             A validated instance of ``schema``.
+
+        Raises:
+            ValueError: when ``images`` is empty.
+            openai.OpenAIError: on transport / auth / rate-limit failures.
         """
-        # HINT: the seven-step recipe:
-        #   1. if not images: raise ValueError("VisionLLM.analyze requires at least one image")
-        #   2. (optional, len(images) > 2): composite via tools.image_utils.side_by_side([...])
-        #   3. data_urls = [encode_image_to_data_url(img) for img in images]
-        #   4. messages = [{"role":"system","content":system}, *vision_message(user, data_urls)]
-        #   5. rf = OpenRouterClient._schema_payload(schema)
-        #   6. resp = self.llm._client().chat.completions.create(
-        #          model=model or settings.default_vision_model,
-        #          messages=messages,
-        #          response_format=rf,
-        #          max_tokens=settings.default_max_tokens,
-        #      )
-        #   7. return schema.model_validate_json(resp.choices[0].message.content)
-        #
-        # HINT: gpt-4o-mini handles up to 2048-px max side comfortably.
-        # claude-3.5-sonnet is fine with 1568. Default 1024 is universal.
-        #
-        # HINT: wrap with ``cost.cached`` once that lands.
-        #
-        # NOTE: we deliberately ignore ``temperature`` here. Vision tasks
-        # benefit from determinism; pin it inside _client().
-        _ = model or settings.default_vision_model
-        # TODO(person-a): implement steps 1–7 above (~15 lines).
-        raise NotImplementedError("Person A: implement OpenRouterVision.analyze")
+        if not images:
+            raise ValueError("OpenRouterVision.analyze requires at least one image")
+
+        # LOGIC: encode + assemble. The shared ``_chat_with_schema`` worker on
+        # OpenRouterClient handles retries, json_object fallback, and validation,
+        # so this method stays a thin assembler.
+        data_urls: list[Path | str] = [encode_image_to_data_url(img) for img in images]
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system},
+            *vision_message(user, data_urls),
+        ]
+        return self.llm._chat_with_schema(
+            messages=messages,
+            schema=schema,
+            model=model or settings.default_vision_model,
+            # NOTE: vision tasks benefit from determinism — pin temperature
+            # at the configured default (0.2). Override per-call only when
+            # you have measured a need.
+            temperature=settings.default_temperature,
+        )

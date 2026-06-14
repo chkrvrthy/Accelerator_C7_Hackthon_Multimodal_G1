@@ -62,12 +62,35 @@ from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel
 
-from src.config import settings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
 F = TypeVar("F", bound=Callable[..., BaseModel])
+
+
+def _cfg() -> Any:
+    """Re-read ``settings`` lazily so ``tmp_settings`` monkeypatch wins in tests."""
+    from src import config as _c
+    return _c.settings
+
+
+def _hash_image_input(img: Any) -> str:
+    """Stable content hash for any image input the vision LLM can consume.
+
+    Files → sha256 of bytes. Data-URIs → sha256 of the URI string. PIL.Image
+    or anything else → sha256 of repr (best-effort, won't be content-stable
+    across processes but is at least intra-call deterministic).
+    """
+    if isinstance(img, (str, Path)):
+        s = str(img)
+        if s.startswith("data:"):
+            return hashlib.sha256(s.encode()).hexdigest()
+        p = Path(s)
+        if p.exists():
+            return hashlib.sha256(p.read_bytes()).hexdigest()
+        return hashlib.sha256(s.encode()).hexdigest()
+    return hashlib.sha256(repr(img).encode()).hexdigest()
 
 
 def prompt_hash(
@@ -95,46 +118,52 @@ def prompt_hash(
 
 
 class ResponseCache:
-    """Disk-backed JSON cache. One file per key under ``cache_dir``."""
+    """Disk-backed JSON cache. One file per key under ``cache_dir``.
+
+    Cache reads honour ``settings.cache_disabled`` (always miss when disabled).
+    Cache writes always happen — so a "disabled" demo run still warms the
+    cache for the next non-disabled run.
+    """
 
     def __init__(self, cache_dir: Path | None = None) -> None:
-        self.dir = Path(cache_dir or settings.cache_dir)
+        self.dir = Path(cache_dir) if cache_dir is not None else Path(_cfg().cache_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self, key: str) -> Path:
         return self.dir / f"{key}.json"
 
     def get(self, key: str) -> dict[str, Any] | None:
-        """Return cached dict or None on miss / IO error.
+        """Return cached dict or ``None`` on miss / IO error.
 
-        Never raises — a corrupt cache must not break the demo. Log and return None.
+        Never raises — a corrupt cache must not break the demo.
         """
-        # HINT: three-line happy path:
-        #   p = self._path(key)
-        #   if not p.exists(): return None
-        #   try: return json.loads(p.read_text())
-        #   except (json.JSONDecodeError, OSError) as e:
-        #       log.warning("cache.get corrupt or unreadable %s: %s", p.name, e)
-        #       return None
-        #
-        # NOTE: respect ``settings.cache_disabled`` — when True, return None
-        # unconditionally. The decorator could check too, but doing it here
-        # means hand-callers also benefit.
-        # TODO(person-a): implement.
-        raise NotImplementedError("Person A: implement ResponseCache.get")
+        if _cfg().cache_disabled:
+            return None
+        p = self._path(key)
+        if not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            # LOGIC: corrupt cache files happen (Ctrl-C mid-write before we had
+            # the temp+rename pattern). Warn loudly so operators notice, but
+            # never escalate to an exception that breaks the run.
+            log.warning("cache.get corrupt or unreadable %s: %s", p.name, e)
+            return None
 
     def put(self, key: str, value: dict[str, Any]) -> None:
-        """Atomically write the cache entry."""
-        # HINT: use temp + rename so a crash mid-write doesn't corrupt the file:
-        #   p = self._path(key)
-        #   tmp = p.with_suffix(".tmp")
-        #   tmp.write_text(json.dumps(value, ensure_ascii=False))
-        #   tmp.replace(p)   # POSIX rename is atomic
-        #
-        # NOTE: if ``settings.cache_disabled``, you may STILL want to write
-        # so the next non-disabled run gets a hit. Document either choice.
-        # TODO(person-a): implement.
-        raise NotImplementedError("Person A: implement ResponseCache.put")
+        """Atomically write the cache entry (temp file + rename)."""
+        p = self._path(key)
+        tmp = p.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+            # LOGIC: POSIX rename is atomic; on Windows, Path.replace also
+            # provides atomic-replace semantics on the same volume.
+            tmp.replace(p)
+        except OSError as e:
+            # LOGIC: a write failure (full disk, permission denied, NFS hiccup)
+            # must NOT crash the user's analysis run. The cache is best-effort.
+            log.warning("cache.put failed for %s: %s", p.name, e)
 
 
 def select_model(task: str = "default") -> str:
@@ -143,9 +172,10 @@ def select_model(task: str = "default") -> str:
     LOGIC: deliberately a one-liner stub — see plan.md "Demoted to thin stub".
     Extensions documented as "post-MVP" in `docs/PERSON_A_infra.md`.
     """
+    cfg = _cfg()
     if task == "vision":
-        return settings.default_vision_model
-    return settings.default_text_model
+        return cfg.default_vision_model
+    return cfg.default_text_model
 
 
 def cached(fn: F) -> F:
@@ -160,29 +190,50 @@ def cached(fn: F) -> F:
             @cached
             def complete(self, *, system, user, schema, model=None, ...):
                 ...
+
+    Cache contract:
+      * Same (system, user, image-bytes-hash, schema, model) → cache hit.
+      * Different schema with same prompt → legitimate miss (different output).
+      * Image input is hashed by **content**, not by path, so file renames
+        do not invalidate the cache.
+      * Exceptions are NEVER cached (a transient 500 today is not 500 tomorrow).
     """
     @wraps(fn)
     def _wrapped(self: Any, **kwargs: Any) -> BaseModel:
-        # HINT: pull cache-relevant kwargs and build the key:
-        #   schema = kwargs["schema"]
-        #   model = kwargs.get("model") or self.settings.default_text_model
-        #   images = []  # vision wrapper passes hashes here; text path is empty
-        #   key = prompt_hash(system=kwargs["system"], user=kwargs["user"],
-        #                     images=images, schema_name=schema.__name__,
-        #                     model=model)
-        #   cache = ResponseCache()
-        #   if not settings.cache_disabled:
-        #       hit = cache.get(key)
-        #       if hit is not None:
-        #           log.debug("cache.hit %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
-        #           return schema.model_validate(hit)
-        #   result: BaseModel = fn(self, **kwargs)
-        #   cache.put(key, result.model_dump())
-        #   return result
-        #
-        # NOTE: we keep this skeleton a no-op so tests and fakes don't pay a
-        # cache penalty. Person A flips this on once OpenRouterClient lands.
-        # TODO(person-a): replace with the recipe above. ~15 lines.
-        return fn(self, **kwargs)
+        cfg = _cfg()
+        schema: type[BaseModel] = kwargs["schema"]
+        # LOGIC: ``model`` may be None — pick the right default by call shape.
+        # Vision calls pass ``images``; text calls don't.
+        is_vision = bool(kwargs.get("images"))
+        model = kwargs.get("model") or (
+            cfg.default_vision_model if is_vision else cfg.default_text_model
+        )
+        image_hashes = [_hash_image_input(img) for img in (kwargs.get("images") or [])]
+        key = prompt_hash(
+            system=kwargs.get("system", ""),
+            user=kwargs.get("user", ""),
+            images=image_hashes,
+            schema_name=schema.__name__,
+            model=model,
+        )
+
+        cache = ResponseCache()
+        hit = cache.get(key)
+        if hit is not None:
+            try:
+                result = schema.model_validate(hit)
+                log.debug("cache.hit %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
+                return result
+            except Exception as e:  # noqa: BLE001 — corrupt entry, fall through.
+                log.warning("cache.hit but %s validation failed (%s); refetching",
+                            schema.__name__, e)
+
+        log.debug("cache.miss %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
+        result = fn(self, **kwargs)
+        try:
+            cache.put(key, result.model_dump())
+        except Exception as e:  # noqa: BLE001 — never let cache write break the run.
+            log.warning("cache.put unexpected error: %s", e)
+        return result
 
     return _wrapped  # type: ignore[return-value]
