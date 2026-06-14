@@ -275,16 +275,31 @@ class OpenRouterClient:
     def _inject_schema_hint(
         messages: list[dict[str, Any]], schema: type[BaseModel]
     ) -> list[dict[str, Any]]:
-        """Append the JSON schema as a textual hint when falling back to json_object."""
-        # LOGIC: in fallback mode the SDK only gets `{"type":"json_object"}`,
-        # no schema. So we paste the schema into the system prompt.
+        """Append the JSON schema as a textual hint when falling back to json_object.
+
+        In fallback mode the SDK only gets ``{"type":"json_object"}`` (no
+        schema), so we paste the schema into the system prompt. We also
+        explicitly demand that EVERY string field carry real content —
+        otherwise some providers happily return a single-key JSON like
+        ``{"palette": [...]}`` and call it a day, which renders as a
+        report with empty narrative accordions (the bug Person E hit).
+        """
         out = [dict(m) for m in messages]
         if out and out[0].get("role") == "system":
             sys_content = out[0].get("content", "") or ""
             schema_blob = json.dumps(schema.model_json_schema())
-            out[0][
-                "content"
-            ] = f"{sys_content}\n\nReturn ONLY a JSON object that conforms to this schema:\n{schema_blob}"
+            completeness = (
+                "EVERY field in the schema MUST be populated with concrete "
+                "content. Do not omit string fields; do not return defaults "
+                "or empty strings. If you genuinely cannot populate a field, "
+                "write a 1-sentence note prefixed with 'unsure:' so the "
+                "downstream renderer knows it was a deliberate abstention "
+                "rather than a missing field."
+            )
+            out[0]["content"] = (
+                f"{sys_content}\n\nReturn ONLY a JSON object that conforms "
+                f"to this schema:\n{schema_blob}\n\n{completeness}"
+            )
         return out
 
     @staticmethod

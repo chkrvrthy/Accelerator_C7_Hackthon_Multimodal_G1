@@ -223,6 +223,25 @@ def check_design_report(report: DesignReport) -> list[QualityIssue]:
                 )
             )
 
+    # SPECIALIST FAN-IN: every per-agent gate is folded into the report-
+    # level gate so the renderer's "Review needed" banner can name the
+    # offending agent (visual / ux / accessibility / brand / market).
+    # Without this fan-in the per-agent checks were dead code — they
+    # existed but nothing called them, so a thin visual narrative or an
+    # empty market block silently slipped through. Each specialist's
+    # field path stays scoped (e.g. "visual.narrative") so the user
+    # immediately knows which slice to retry.
+    if report.visual:
+        issues.extend(check_visual(report.visual))
+    if report.ux:
+        issues.extend(check_ux(report.ux))
+    if report.accessibility:
+        issues.extend(check_accessibility(report.accessibility))
+    if report.brand:
+        issues.extend(check_brand(report.brand))
+    if report.market:
+        issues.extend(check_market(report.market))
+
     return issues
 
 
@@ -255,6 +274,32 @@ def check_visual(v: VisualAnalysis) -> list[QualityIssue]:
             QualityIssue(
                 "visual.observations",
                 f"only {len(v.observations)} observations; want 5-10 specific facts.",
+            )
+        )
+    # SHALLOW-RESPONSE GUARD. When the LLM rejects strict json_schema and
+    # falls through to plain json_object, some providers emit a minimal
+    # JSON ({"palette": [...]}) and skip every str field. The schema
+    # accepts it because every narrative field defaults to "". We catch
+    # that "palette but no narrative" pattern explicitly so the user sees
+    # a clear "visual narrative missing" banner instead of silently empty
+    # accordions in the report.
+    narrative_empty = (
+        not (v.layout or "").strip()
+        and not (v.hierarchy or "").strip()
+        and not (v.typography or "").strip()
+        and not (v.spacing_notes or "").strip()
+    )
+    if narrative_empty:
+        issues.append(
+            QualityIssue(
+                field="visual.narrative",
+                reason=(
+                    "layout, hierarchy, typography and spacing all came back "
+                    "empty — the model returned a minimal palette-only JSON. "
+                    "Re-run, or try a higher-resolution screenshot so the "
+                    "vision model has more to anchor on."
+                ),
+                severity="fail",
             )
         )
     return issues

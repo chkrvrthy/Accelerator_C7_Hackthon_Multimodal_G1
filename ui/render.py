@@ -302,16 +302,43 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
         bullets = "".join(
             f"<li><b>{e(i.field)}</b> — {e(i.reason)}</li>" for i in (fails + warns)[:5]
         )
+        # Plain-language explainer collapsed by default. The user has to
+        # *want* the detail; we never lecture them above the fold. The
+        # earlier copy left judges asking "what does provisional mean?"
+        # so we now spell it out: which numbers, why provisional, how to
+        # fix. Single <details> keeps the banner compact.
+        explainer = (
+            '<details class="quality-banner-explain">'
+            "<summary>What does this mean?</summary>"
+            "<ul class=\"explainer\">"
+            "<li><b>Review needed</b> — at least one specialist agent "
+            "returned thin or placeholder content. The report still "
+            "renders so you can read what *did* come back, but the score "
+            "and recommendations should be treated as a draft, not a "
+            "verdict.</li>"
+            "<li><b>Provisional numbers</b> — the score breakdown and "
+            "any <i>+X% lift</i> hints below are estimates from the "
+            "agents that fired cleanly; the flagged agent's slice is "
+            "either missing or below the quality bar, so the math is "
+            "skewed.</li>"
+            "<li><b>How to fix</b> — re-run the analysis "
+            "(transient model errors are usually one-shot), try a "
+            "higher-resolution screenshot, or switch the model in "
+            ".env (DEFAULT_MODEL → openai/gpt-4o or anthropic/"
+            "claude-3.5-sonnet for vision-heavy runs).</li>"
+            "</ul>"
+            "</details>"
+        )
         parts.append(
             '<div class="quality-banner">'
             '<span class="quality-banner-icon">!</span>'
             "<div>"
             '<div class="quality-banner-title">Review needed</div>'
             f"<p>{len(fails)} blocking issue(s) and {len(warns)} warning(s) "
-            "in this report. The synthesizer output is below the quality bar; "
-            "the numbers are provisional and the agent retry loop will "
-            "re-prompt on the next run.</p>"
+            "in this report. The flagged sections below are draft-quality "
+            "until you re-run.</p>"
             f"<ul>{bullets}</ul>"
+            f"{explainer}"
             "</div>"
             "</div>"
         )
@@ -365,13 +392,32 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
 
     # --- collapsible specialist details ------------------------------ #
     if report.visual:
-        body = _ul(
-            [
-                f"Layout: {e(report.visual.layout or 'Not returned')}",
-                f"Hierarchy: {e(report.visual.hierarchy or 'Not returned')}",
-                f"Density score: {report.visual.density_score:.1f}/100",
-            ]
+        # SHALLOW-RESPONSE LANDING. When the LLM rejects strict
+        # json_schema and falls through to plain json_object, some
+        # providers return a palette-only JSON. The schema accepts it
+        # because every str field defaults to "" — but rendering "Not
+        # returned" three times in a row reads as a UI bug, not a model
+        # bug. We surface that case explicitly with a calm one-liner so
+        # the user knows what happened and what to do.
+        narrative_empty = not (
+            (report.visual.layout or "").strip()
+            or (report.visual.hierarchy or "").strip()
+            or (report.visual.typography or "").strip()
+            or (report.visual.spacing_notes or "").strip()
         )
+        rows = [
+            f"Layout: {e(report.visual.layout) if report.visual.layout else '<i>not captured</i>'}",
+            f"Hierarchy: {e(report.visual.hierarchy) if report.visual.hierarchy else '<i>not captured</i>'}",
+            f"Density score: {report.visual.density_score:.1f}/100",
+        ]
+        if narrative_empty:
+            rows.append(
+                "<i>Note: the vision model returned only a palette this run "
+                "(no narrative). Re-run, or switch DEFAULT_MODEL in .env "
+                "to a vision-strong model (openai/gpt-4o, anthropic/"
+                "claude-3.5-sonnet) and try again.</i>"
+            )
+        body = _ul(rows)
         parts.append(
             f'<details class="specialist"><summary>Visual analysis</summary>'
             f'<div class="body">{body}</div></details>'

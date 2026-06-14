@@ -26,11 +26,31 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# Silence a few noisy third-party warnings that surface in the console
+# every request and panic users without telling them anything actionable:
+#   1. Gradio uses Starlette's deprecated `HTTP_422_UNPROCESSABLE_ENTITY`
+#      constant under the hood. Cosmetic — they will rename in a minor
+#      release. Until then we hide it here so the launch console stays
+#      readable.
+#   2. duckduckgo_search is being renamed to ddgs upstream. Same story:
+#      we'll migrate when our pin updates; meanwhile the warning adds
+#      noise. We keep the package call working; only the warning is
+#      hidden.
+warnings.filterwarnings(
+    "ignore",
+    message=".*HTTP_422_UNPROCESSABLE_ENTITY.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*duckduckgo_search.*has been renamed.*",
+)
 
 from src.config import (  # noqa: E402, F401  # `settings` is reassigned via `global` in _fresh_settings
     Settings,
@@ -40,6 +60,20 @@ from src.utils.logger import get_logger  # noqa: E402
 
 log = get_logger(__name__)
 
+from ui.handlers import on_run  # noqa: E402
+from ui.references import _reference_query_from_ui, _references_for_report  # noqa: E402
+from ui.render import render_report  # noqa: E402
+from ui.state import (  # noqa: E402
+    _cache_file_count,
+    _cost_telemetry_html,
+    _default_real_mode,
+    _fresh_settings,
+    _has_openrouter_key,
+    _local_reference_file_count,
+    _status_message,
+    _tool_registry_html,
+    _vector_row_count,
+)
 from ui.strings import (  # noqa: E402
     ANALYZE_HELP_HTML,
     CONTEXT_FIELD_INFO,
@@ -58,20 +92,6 @@ from ui.strings import (  # noqa: E402
     STEPS_EXPLAINER_HTML,
     TOOL_REGISTRY_HEADER_HTML,
     runtime_config_card_html,
-)
-from ui.handlers import on_run  # noqa: E402
-from ui.references import _reference_query_from_ui, _references_for_report  # noqa: E402
-from ui.render import render_report  # noqa: E402
-from ui.state import (  # noqa: E402
-    _cache_file_count,
-    _cost_telemetry_html,
-    _default_real_mode,
-    _fresh_settings,
-    _has_openrouter_key,
-    _local_reference_file_count,
-    _status_message,
-    _tool_registry_html,
-    _vector_row_count,
 )
 from ui.styles import APP_CSS, FORCE_LIGHT_THEME_HEAD, FORCE_LIGHT_THEME_JS  # noqa: E402
 
@@ -124,6 +144,14 @@ def main() -> None:
                         f"currently {'real APIs' if _default_real_mode() else 'offline fakes'}. "
                         "Toggle *USE_REAL* in *.env* to switch."
                     )
+                    gr.Markdown(
+                        "**Quickstart**: click the row below to fill the form "
+                        "with a bundled demo screenshot + frame label + "
+                        "context. Useful for kicking the tyres without "
+                        "uploading anything of your own. Clear it before "
+                        "running on real designs.",
+                        elem_classes=["upload-tip"],
+                    )
                     gr.Examples(
                         examples=[
                             [
@@ -133,7 +161,7 @@ def main() -> None:
                             ]
                         ],
                         inputs=[image_in, frame_labels_in, instructions_in],
-                        label="Try the bundled sample",
+                        label="Try the bundled sample (one-click prefill)",
                     )
 
                 log_out = gr.HTML(_status_message("Ready", EMPTY_LOG_BODY))
@@ -209,6 +237,20 @@ def main() -> None:
                 cost_view = gr.HTML(_cost_telemetry_html())
                 refresh_btn = gr.Button("Refresh telemetry", variant="secondary")
                 refresh_btn.click(fn=_cost_telemetry_html, outputs=[cost_view])
+
+                # Auto-refresh the cost ledger whenever a new report
+                # lands in report_state. Without this hook, users had to
+                # click Refresh after every Run to see tokens/USD move,
+                # making it look like the tracker was broken (the bug
+                # Person E hit on Windows: "cost in settings tab didn't
+                # show numbers getting moved"). The lambda ignores the
+                # report payload — _cost_telemetry_html reads the
+                # process-local CostTracker snapshot directly.
+                report_state.change(
+                    fn=lambda _r: _cost_telemetry_html(),
+                    inputs=[report_state],
+                    outputs=[cost_view],
+                )
 
                 gr.HTML(TOOL_REGISTRY_HEADER_HTML)
                 gr.HTML(_tool_registry_html())

@@ -108,12 +108,46 @@ def _references_for_report(
             "</div>"
         )
 
-    gallery_msg = (
-        f"{len(gallery_items)} brand reference(s) retrieved by the brand agent."
-        if gallery_items
-        else "Brand agent retrieved no comparable references for this screen "
-        "(empty index or off-domain). Search below to add context."
-    )
+    # When the gallery is empty we want a *helpful* explanation rather
+    # than a generic "no references". Most users hit this because they
+    # haven't run ``make ingest`` yet — surface that one-liner instead
+    # of a vague hint. We probe the corpus state lazily so the import
+    # cost only lands on the empty path.
+    if gallery_items:
+        gallery_msg = (
+            f"{len(gallery_items)} brand reference(s) the agent looked at this run. "
+            "Click any thumbnail to open it; the small label shows the similarity "
+            "score and (in multi-frame runs) which screen surfaced the match."
+        )
+    else:
+        try:
+            vector_rows = _vector_row_count()
+            local_files = _local_reference_file_count()
+        except Exception:
+            vector_rows, local_files = 0, 0
+        if vector_rows == 0:
+            gallery_msg = (
+                "Empty brand-RAG corpus. Drop a few reference images into "
+                "data/reference/ and run `make ingest` (Linux/macOS) or "
+                "`python -m scripts.ingest_references --source ./data/reference` "
+                "(Windows). Until then the brand agent has nothing to compare "
+                "against and the gallery above stays empty. Use the search "
+                "below for ad-hoc lookups against the local index + the live web."
+            )
+        elif local_files == 0:
+            gallery_msg = (
+                f"Vector index has {vector_rows} row(s) but the on-disk "
+                "data/reference/ folder is empty — the index points at images "
+                "that have moved. Re-run `make ingest` after restoring the files."
+            )
+        else:
+            gallery_msg = (
+                f"Brand agent looked at the corpus ({vector_rows} indexed rows, "
+                f"{local_files} on-disk files) but nothing close enough to your "
+                "screens turned up — likely an off-domain run (e.g. you uploaded "
+                "a payment screen but indexed dashboards). Use the search below "
+                "to widen the lookup."
+            )
     summary_html = (
         '<div class="reference-card">'
         "<h3>References used in this run</h3>"
@@ -164,12 +198,23 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
         )
     elif gallery_items:
         status = f"{vector_rows} indexed references from {local_files} local files."
+    elif vector_rows == 0:
+        status = (
+            "No local CLIP index yet — searching the live web below. To enable "
+            "image-similarity matches, drop reference images into data/reference/ "
+            "and run `make ingest`."
+        )
     else:
         status = (
-            "No indexed matches yet. Add images to the reference dir and run "
-            "make ingest."
+            f"No on-screen match in the {vector_rows}-row local index for this "
+            "query — try a broader keyword, or see the live-web results below."
         )
 
+    # Live web. Always run, even when the local gallery is empty, so the
+    # search box is useful out-of-the-box (the bug Person E hit: typed
+    # 'sites similar to stripe', saw nothing). _format_web_references is
+    # already wrapped in try/except internally; we wrap once more so a
+    # network blip never reaches the user as a Gradio error.
     try:
         web_refs = _format_web_references(query, use_real=True)
     except Exception as e:
@@ -182,11 +227,13 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
         )
 
     # FALLBACK: editorial references (hand-curated, no network, no LLM).
-    # Shown ONLY when both gallery_items and web_refs are empty so we
-    # never overwhelm a fully-functional run with the static list.
+    # Shown whenever either the local gallery OR the web result block came
+    # back empty — the search panel must never feel "broken". Earlier
+    # this triggered only when BOTH were empty, which made fragile DDG
+    # lookups silently lose the curated layer.
     editorial_block = ""
     has_web_results = "<li>" in web_refs and "(none yet" not in web_refs.lower()
-    if not gallery_items and not has_web_results:
+    if not gallery_items or not has_web_results:
         from src.rag.editorial_refs import render_as_html, search_editorial
 
         editorial_block = render_as_html(search_editorial(query, limit=6))

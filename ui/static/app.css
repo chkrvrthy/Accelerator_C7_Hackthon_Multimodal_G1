@@ -771,6 +771,64 @@ body {
   margin-bottom: 2px;
 }
 
+/* "What does this mean?" disclosure — collapsed by default. The arrow
+   sits below the bullets and gives users a way to ask without lecturing
+   them. We keep colors consistent with the banner so the disclosure
+   reads as part of the same surface. */
+.quality-banner-explain {
+  margin-top: 10px;
+  border-top: 1px dashed rgba(74, 58, 8, 0.25);
+  padding-top: 8px;
+}
+
+.quality-banner-explain summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4a3a08 !important;
+  -webkit-text-fill-color: #4a3a08 !important;
+  list-style: none;
+}
+
+.quality-banner-explain summary::-webkit-details-marker {
+  display: none;
+}
+
+.quality-banner-explain summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 12px;
+  transition: transform 0.15s ease;
+}
+
+.quality-banner-explain[open] > summary::before {
+  content: "▾ ";
+}
+
+.quality-banner-explain ul.explainer {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.quality-banner-explain ul.explainer li {
+  font-size: 12.5px;
+  color: #4a3a08 !important;
+  -webkit-text-fill-color: #4a3a08 !important;
+  margin-bottom: 6px;
+  line-height: 1.55;
+}
+
+.quality-banner-explain ul.explainer li b {
+  color: #1a1a1a !important;
+  -webkit-text-fill-color: #1a1a1a !important;
+}
+
+.quality-banner-explain ul.explainer li i {
+  font-style: italic;
+  color: #4a3a08 !important;
+  -webkit-text-fill-color: #4a3a08 !important;
+}
+
 /* --- executive summary (the senior-designer memo at the top) ------ */
 .exec-summary {
   border-left: 3px solid var(--teal);
@@ -1111,6 +1169,15 @@ body {
 
 .report-wrap details.specialist .body {
   padding: 4px 18px 16px;
+}
+
+/* Specialist body italics carry our "not captured this run" hints —
+   force visible color since some Gradio themes set <i> to currentColor
+   which cascades transparent under the gradient backgrounds. */
+.report-wrap details.specialist .body i {
+  font-style: italic;
+  color: var(--ink-muted, #4a4a4a) !important;
+  -webkit-text-fill-color: currentColor !important;
 }
 
 .json-holder {
