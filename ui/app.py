@@ -254,6 +254,175 @@ button.primary,
   border-color: #0f766e !important;
 }
 
+/* Contrast safety overrides for Gradio-generated controls. */
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3,
+.gradio-container h4,
+.gradio-container h5,
+.gradio-container h6,
+.gradio-container p,
+.gradio-container li,
+.gradio-container label,
+.gradio-container legend,
+.gradio-container .prose,
+.gradio-container .markdown,
+.gradio-container .caption,
+.gradio-container .label-wrap,
+.gradio-container .block-title,
+.gradio-container .block-label {
+  color: var(--ink) !important;
+}
+
+.gradio-container p,
+.gradio-container li,
+.gradio-container .prose,
+.gradio-container .markdown {
+  color: var(--soft-text) !important;
+}
+
+.gradio-container button,
+.gradio-container button span,
+.gradio-container [role="button"],
+.gradio-container [role="button"] span {
+  color: var(--ink) !important;
+}
+
+.gradio-container button.primary,
+.gradio-container button.primary span,
+.gradio-container .gradio-button.primary,
+.gradio-container .gradio-button.primary span {
+  background: #0f766e !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+  font-weight: 750 !important;
+}
+
+.gradio-container button[role="tab"],
+.gradio-container button[role="tab"] span,
+.gradio-container .tab-nav button,
+.gradio-container .tab-nav button span {
+  background: #ffffff !important;
+  border-color: #cbd7cf !important;
+  color: #1d2528 !important;
+  font-weight: 700 !important;
+}
+
+.gradio-container button[role="tab"][aria-selected="true"],
+.gradio-container button[role="tab"][aria-selected="true"] span,
+.gradio-container .tab-nav button.selected,
+.gradio-container .tab-nav button.selected span {
+  background: #0f766e !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+.gradio-container textarea,
+.gradio-container input,
+.gradio-container table,
+.gradio-container th,
+.gradio-container td {
+  color: #1d2528 !important;
+}
+
+.gradio-container th {
+  background: #eaf3ef !important;
+  color: #16282b !important;
+}
+
+.gradio-container td {
+  background: #ffffff !important;
+}
+
+.gradio-container [data-testid="file"],
+.gradio-container [data-testid="file"] *,
+.gradio-container .file-preview,
+.gradio-container .file-preview *,
+.gradio-container .upload-container,
+.gradio-container .upload-container *,
+.gradio-container .filepond--drop-label,
+.gradio-container .filepond--drop-label * {
+  color: #1d2528 !important;
+}
+
+.gradio-container [data-testid="file"],
+.gradio-container .upload-container,
+.gradio-container .filepond--root {
+  background: #ffffff !important;
+  border-color: #b9c8c0 !important;
+}
+
+.gradio-container .upload-panel .form,
+.gradio-container .upload-panel .block,
+.gradio-container .upload-panel .wrap,
+.gradio-container .upload-panel .input-container,
+.gradio-container .upload-panel .checkbox-container,
+.gradio-container .upload-panel [data-testid="file"],
+.gradio-container .upload-panel .file-preview,
+.gradio-container .upload-panel .upload-container,
+.gradio-container .upload-panel .filepond--root,
+.gradio-container .upload-panel .filepond--panel,
+.gradio-container .upload-panel .filepond--drop-label {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #b9c8c0 !important;
+  color: #1d2528 !important;
+  -webkit-text-fill-color: #1d2528 !important;
+}
+
+.gradio-container .upload-panel .form *,
+.gradio-container .upload-panel .block *,
+.gradio-container .upload-panel [data-testid="file"] *,
+.gradio-container .upload-panel .file-preview *,
+.gradio-container .upload-panel .upload-container *,
+.gradio-container .upload-panel .filepond--drop-label *,
+.gradio-container .upload-panel .checkbox-container *,
+.gradio-container .upload-panel textarea,
+.gradio-container .upload-panel textarea *,
+.gradio-container .upload-panel input,
+.gradio-container .upload-panel input * {
+  color: #1d2528 !important;
+  -webkit-text-fill-color: #1d2528 !important;
+}
+
+.gradio-container .upload-panel label.float,
+.gradio-container .upload-panel .float,
+.gradio-container .upload-panel [data-testid="block-info"],
+.gradio-container .upload-panel .label-wrap,
+.gradio-container .upload-panel .label-wrap *,
+.gradio-container .upload-panel .block-label,
+.gradio-container .upload-panel .block-title {
+  background: #eef5f1 !important;
+  background-color: #eef5f1 !important;
+  color: #16282b !important;
+  -webkit-text-fill-color: #16282b !important;
+  border: 1px solid #bed8cc !important;
+  border-radius: 7px !important;
+  font-weight: 750 !important;
+}
+
+.gradio-container .upload-panel textarea,
+.gradio-container .upload-panel input[type="text"] {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border: 1px solid #b9c8c0 !important;
+  color: #1d2528 !important;
+  -webkit-text-fill-color: #1d2528 !important;
+}
+
+.gradio-container .upload-panel input[type="checkbox"] {
+  accent-color: #0f766e !important;
+}
+
+.gradio-container .gr-accordion,
+.gradio-container .gr-accordion *,
+.gradio-container details,
+.gradio-container details * {
+  background-color: #fffefb !important;
+  color: #1d2528 !important;
+  -webkit-text-fill-color: #1d2528 !important;
+}
+
 @media (max-width: 760px) {
   .hero-band {
     padding: 22px 18px;
@@ -266,6 +435,18 @@ button.primary,
   .steps {
     grid-template-columns: 1fr;
   }
+}
+
+.gradio-container .upload-panel button.primary,
+.gradio-container .upload-panel button.primary.svelte-xzq5jh,
+.gradio-container button.primary,
+.gradio-container button.primary *,
+.gradio-container .primary,
+.gradio-container .primary * {
+  background-color: #0f766e !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 """
 
