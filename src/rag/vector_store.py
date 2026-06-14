@@ -53,7 +53,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.config import settings
 from src.utils.logger import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -77,7 +76,12 @@ def open_db() -> "lancedb.DBConnection":
     # development the path is a directory; for S3 it's "s3://bucket/prefix".
     # That swap is the production-path migration described in the plan.
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement open_db")
+    import lancedb
+
+    from src.config import settings as current_settings
+
+    current_settings.vector_store_dir.mkdir(parents=True, exist_ok=True)
+    return lancedb.connect(str(current_settings.vector_store_dir))
 
 
 def get_or_create_table(
@@ -110,9 +114,25 @@ def get_or_create_table(
     # LOGIC: ``pa.list_(pa.float32(), dim)`` is the FIXED-size variant — that
     # is what LanceDB indexes for vector search. ``pa.list_(pa.float32())``
     # (without ``dim``) compiles but search is slow.
-    _ = name or settings.vector_collection
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement get_or_create_table")
+    import pyarrow as pa
+
+    from src.config import settings as current_settings
+
+    schema = pa.schema(
+        [
+            pa.field("id", pa.string()),
+            pa.field("vector", pa.list_(pa.float32(), dim)),
+            pa.field("image_path", pa.string()),
+            pa.field("source", pa.string()),
+            pa.field("tags", pa.list_(pa.string())),
+            pa.field("description", pa.string()),
+        ]
+    )
+    target = name or current_settings.vector_collection
+    if target in db.table_names():
+        return db.open_table(target)
+    return db.create_table(target, schema=schema)
 
 
 def upsert_records(table: Any, records: list[dict[str, Any]]) -> None:
@@ -131,7 +151,15 @@ def upsert_records(table: Any, records: list[dict[str, Any]]) -> None:
     # PITFALL: LanceDB's delete() uses SQL-style strings; if any id contains
     # a single quote you must escape it. Stable hex hashes (sha1) avoid this.
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement upsert_records")
+    if not records:
+        return
+
+    for start in range(0, len(records), 100):
+        chunk = records[start : start + 100]
+        ids = [r["id"] for r in chunk]
+        in_clause = ",".join(f"'{i.replace(chr(39), chr(39) + chr(39))}'" for i in ids)
+        table.delete(f"id IN ({in_clause})")
+        table.add(chunk)
 
 
 def query_by_vector(
@@ -149,4 +177,7 @@ def query_by_vector(
     # NOTE: result rows have a ``_distance`` field. The retriever converts
     # that to ``score = 1 - _distance`` (cosine distance to similarity).
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement query_by_vector")
+    q = table.search(vector).metric("cosine").limit(k)
+    if where:
+        q = q.where(where)
+    return q.to_list()

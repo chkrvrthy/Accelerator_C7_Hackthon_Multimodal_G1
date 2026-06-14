@@ -65,7 +65,10 @@ def load_image(path: Path | str) -> "_Image.Image":
     # NOTE: we always exif_transpose so phone screenshots come out upright.
     # CLIP and the vision LLM both score better on upright images.
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement load_image")
+    from PIL import Image, ImageOps
+
+    img = Image.open(path)
+    return ImageOps.exif_transpose(img).convert("RGB")
 
 
 def resize_max_side(img: "_Image.Image", max_side: int = 1024) -> "_Image.Image":
@@ -84,7 +87,13 @@ def resize_max_side(img: "_Image.Image", max_side: int = 1024) -> "_Image.Image"
     # LOGIC: LANCZOS is the best quality/speed trade-off for downsampling.
     # NEAREST is wrong (jagged), BILINEAR is acceptable for thumbnails only.
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement resize_max_side")
+    from PIL import Image
+
+    w, h = img.size
+    scale = max_side / max(w, h)
+    if scale >= 1.0:
+        return img
+    return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
 
 def to_data_url(img: "_Image.Image", fmt: str = "PNG") -> str:
@@ -100,9 +109,11 @@ def to_data_url(img: "_Image.Image", fmt: str = "PNG") -> str:
     #
     # NOTE: PNG is a safe default. Use JPEG only if you can tolerate
     # quality loss (you can for screenshots; you cannot for diagrams).
-    _ = (BytesIO, base64)  # silence unused-import lint until impl lands
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement to_data_url")
+    buf = BytesIO()
+    img.save(buf, format=fmt)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/{fmt.lower()};base64,{b64}"
 
 
 def side_by_side(
@@ -132,7 +143,21 @@ def side_by_side(
     # ransom note. If your refs are very different aspect ratios, consider
     # padding to a common height instead of resizing.
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement side_by_side")
+    from PIL import Image
+
+    if not images:
+        raise ValueError("side_by_side: empty list")
+    target_h = min(im.height for im in images)
+    resized = [
+        im.resize((int(im.width * target_h / im.height), target_h)) for im in images
+    ]
+    total_w = sum(im.width for im in resized) + gap * (len(resized) - 1)
+    canvas = Image.new("RGB", (total_w, target_h), bg)
+    x = 0
+    for im in resized:
+        canvas.paste(im, (x, 0))
+        x += im.width + gap
+    return canvas
 
 
 def annotate_box(img: "_Image.Image", box: tuple[int, int, int, int], label: str) -> "_Image.Image":
@@ -148,7 +173,13 @@ def annotate_box(img: "_Image.Image", box: tuple[int, int, int, int], label: str
     #   draw.text((box[0], max(box[1] - 14, 0)), label, fill=(255, 0, 0))
     #   return out
     # TODO(person-b, post-MVP): implement once the UI uses it.
-    raise NotImplementedError("Person B: implement annotate_box")
+    from PIL import ImageDraw
+
+    out = img.copy()
+    draw = ImageDraw.Draw(out)
+    draw.rectangle(box, outline=(255, 0, 0), width=3)
+    draw.text((box[0], max(box[1] - 14, 0)), label, fill=(255, 0, 0))
+    return out
 
 
 def thumbnail(path: Path | str, size: tuple[int, int] = (256, 256)) -> "_Image.Image":
@@ -158,4 +189,6 @@ def thumbnail(path: Path | str, size: tuple[int, int] = (256, 256)) -> "_Image.I
     #   img.thumbnail(size)   # in-place, preserves aspect ratio
     #   return img
     # TODO(person-b): implement.
-    raise NotImplementedError("Person B: implement thumbnail")
+    img = load_image(path)
+    img.thumbnail(size)
+    return img

@@ -96,4 +96,11 @@ class RAGSearchTool:
         #       args_schema=self.args_schema,
         #   )
         # TODO(person-b, optional): wire StructuredTool when needed.
-        raise NotImplementedError("Optional: wire StructuredTool when needed.")
+        from langchain_core.tools import StructuredTool
+
+        return StructuredTool.from_function(
+            self._run,
+            name=self.name,
+            description=self.description,
+            args_schema=self.args_schema,
+        )

@@ -34,3 +34,9 @@ def test_rag_tool_validates_by_argument(fake_retriever):
 def test_rag_tool_input_schema_bounds():
     with pytest.raises(Exception):
         RAGSearchInput(query="q", k=999)  # k upper bound is 50
+
+
+def test_rag_tool_to_langchain_when_installed(fake_retriever):
+    pytest.importorskip("langchain_core")
+    tool = RAGSearchTool(retriever=fake_retriever).to_langchain()
+    assert tool.name == "rag_search_designs"

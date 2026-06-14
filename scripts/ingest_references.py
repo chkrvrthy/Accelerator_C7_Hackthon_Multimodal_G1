@@ -115,8 +115,43 @@ def main(argv: list[str] | None = None) -> int:
     # ("reference/foo.png" instead of e.g. "/home/<user>/.../foo.png" on
     # Linux/Mac or "C:\\Users\\<user>\\...\\foo.png" on Windows).
 
-    log.warning("ingest: skeleton only — Person B implements the pipeline.")
     # TODO(person-b): paste the recipe above and run `make ingest`.
+    from rich.progress import track
+
+    from src.rag.embedder import CLIPEmbedder
+    from src.rag.vector_store import get_or_create_table, open_db, upsert_records
+
+    embedder = CLIPEmbedder()
+    db = open_db()
+    if args.clear:
+        try:
+            db.drop_table(settings.vector_collection)
+        except Exception:
+            pass  # table may not exist
+    table = get_or_create_table(db, dim=embedder.dim)
+
+    files = sorted(p for p in source.rglob("*") if p.suffix.lower() in SUPPORTED_EXTS)
+    if not files:
+        log.warning("no supported images under %s", source)
+        return 0
+
+    records = []
+    batches = [files[i : i + args.batch_size] for i in range(0, len(files), args.batch_size)]
+    for batch in track(batches, description="Embedding references"):
+        vecs = embedder.embed_batch(batch)
+        for p, v in zip(batch, vecs, strict=True):
+            records.append(
+                {
+                    "id": _stable_id(p),
+                    "vector": v.tolist(),
+                    "image_path": str(p.relative_to(source.parent)),
+                    "source": source.name,
+                    "tags": [args.tag] if args.tag else [],
+                    "description": "",
+                }
+            )
+    upsert_records(table, records)
+    log.info("ingest: wrote %d records (tag=%s)", len(records), args.tag)
     return 0
 
 

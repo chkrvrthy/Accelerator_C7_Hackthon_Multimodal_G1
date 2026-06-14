@@ -102,7 +102,24 @@ class CLIPEmbedder:
         #   self._shared[key] = (model, preprocess, tokenizer)
         #   return self._shared[key]
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement CLIPEmbedder._ensure_loaded")
+        import open_clip
+        import torch
+
+        key = f"{self.model_name}::{self.pretrained}"
+        if key in self._shared:
+            cached = self._shared[key]
+            self.device = cached[3]
+            return cached[:3]
+
+        self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            self.model_name,
+            pretrained=self.pretrained,
+            device=self.device,
+        )
+        tokenizer = open_clip.get_tokenizer(self.model_name)
+        self._shared[key] = (model, preprocess, tokenizer, self.device)
+        return self._shared[key][:3]
 
     # ------------------------------------------------------------------
     def embed_image(self, image: Path | str | "Image.Image") -> "np.ndarray":
@@ -123,7 +140,17 @@ class CLIPEmbedder:
         # HINT: when device is CPU and image count > 50, log a warning so
         # the demo author knows to run with GPU for the ingest step.
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement CLIPEmbedder.embed_image")
+        import torch
+
+        from src.tools.image_utils import load_image
+
+        model, preprocess, _ = self._ensure_loaded()
+        img = load_image(image) if isinstance(image, (str, Path)) else image.convert("RGB")
+        tensor = preprocess(img).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            emb = model.encode_image(tensor)
+            emb = torch.nn.functional.normalize(emb, dim=-1)
+        return emb.squeeze(0).cpu().numpy().astype("float32")
 
     def embed_text(self, text: str) -> "np.ndarray":
         """Return an L2-normalized 512-d float32 vector for one query."""
@@ -135,7 +162,14 @@ class CLIPEmbedder:
         #          emb = torch.nn.functional.normalize(emb, dim=-1)
         #   4. return emb.squeeze(0).cpu().numpy().astype("float32")
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement CLIPEmbedder.embed_text")
+        import torch
+
+        model, _, tokenizer = self._ensure_loaded()
+        tokens = tokenizer([text]).to(self.device)
+        with torch.no_grad():
+            emb = model.encode_text(tokens)
+            emb = torch.nn.functional.normalize(emb, dim=-1)
+        return emb.squeeze(0).cpu().numpy().astype("float32")
 
     def embed_batch(self, images: list[Path | str]) -> "np.ndarray":
         """Optional bulk path used by the ingest CLI.
@@ -154,4 +188,23 @@ class CLIPEmbedder:
         # NOTE: for >256 images, chunk into batches of 64 to keep memory
         # bounded. Premature optimization until then.
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement CLIPEmbedder.embed_batch")
+        import numpy as np
+        import torch
+
+        from src.tools.image_utils import load_image
+
+        if not images:
+            return np.empty((0, self.dim), dtype="float32")
+
+        model, preprocess, _ = self._ensure_loaded()
+        if self.device == "cpu" and len(images) > 50:
+            log.warning("embedding %d images on CPU; ingest will be faster with CUDA", len(images))
+        chunks: list[np.ndarray] = []
+        for start in range(0, len(images), 64):
+            batch_paths = images[start : start + 64]
+            batch = torch.stack([preprocess(load_image(p)) for p in batch_paths]).to(self.device)
+            with torch.no_grad():
+                embs = model.encode_image(batch)
+                embs = torch.nn.functional.normalize(embs, dim=-1)
+            chunks.append(embs.cpu().numpy().astype("float32"))
+        return np.vstack(chunks)

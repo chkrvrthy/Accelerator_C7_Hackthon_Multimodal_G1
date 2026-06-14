@@ -86,7 +86,12 @@ class LanceRetriever:
         # NOTE: never load the model in module-level code. Other slices (UI,
         # MCP) construct LanceRetriever once at startup and reuse it.
         # TODO(person-b): implement.
-        self.embedder = embedder
+        from src.rag.embedder import CLIPEmbedder
+        from src.rag.vector_store import get_or_create_table, open_db
+
+        self.embedder = embedder or CLIPEmbedder()
+        self.db = open_db()
+        self.table = get_or_create_table(self.db, dim=self.embedder.dim)
 
     # ------------------------------------------------------------------
     # Retriever protocol
@@ -102,7 +107,11 @@ class LanceRetriever:
         # HINT: when the corpus is empty, ``rows == []`` — return ``[]``,
         # do not raise. The brand agent has a fallback branch for that case.
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement LanceRetriever.retrieve_by_image")
+        from src.rag.vector_store import query_by_vector
+
+        vec = self.embedder.embed_image(image_path)
+        rows = query_by_vector(self.table, vec, k=k)
+        return [self._to_ref(r) for r in rows if (1 - r["_distance"]) >= SCORE_FLOOR]
 
     def retrieve_by_text(self, text: str, k: int = 5) -> list[RetrievedRef]:
         """Return top-k references most similar to the text query.
@@ -115,7 +124,11 @@ class LanceRetriever:
         #   rows = query_by_vector(self.table, vec, k=k)
         #   return [self._to_ref(r) for r in rows if (1 - r["_distance"]) >= SCORE_FLOOR]
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement LanceRetriever.retrieve_by_text")
+        from src.rag.vector_store import query_by_vector
+
+        vec = self.embedder.embed_text(text)
+        rows = query_by_vector(self.table, vec, k=k)
+        return [self._to_ref(r) for r in rows if (1 - r["_distance"]) >= SCORE_FLOOR]
 
     # ------------------------------------------------------------------
     def _to_ref(self, row: dict[str, Any]) -> RetrievedRef:
@@ -131,7 +144,16 @@ class LanceRetriever:
         #                 "description": row.get("description", "")},
         #   )
         # TODO(person-b): implement.
-        raise NotImplementedError("Person B: implement LanceRetriever._to_ref")
+        return RetrievedRef(
+            id=row["id"],
+            score=float(1.0 - row["_distance"]),
+            image_path=row["image_path"],
+            metadata={
+                "source": row.get("source", ""),
+                "tags": row.get("tags", []),
+                "description": row.get("description", ""),
+            },
+        )
 
 
 # --------------------------------------------------------------------------- #
