@@ -66,7 +66,7 @@ from src.agents.base import AgentDeps, build_default_deps, run_with_schema
 from src.agents.tools import call_tool
 from src.schemas.outputs import GraphState, VisualAnalysis
 from src.utils.logger import get_logger
-from src.utils.prompts import visual_analysis_system, visual_analysis_user
+from src.utils.prompts import multi_image_note, visual_analysis_system, visual_analysis_user
 
 if TYPE_CHECKING:  # pragma: no cover
     pass
@@ -84,24 +84,32 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, VisualAnalysis]:
     Returns:
         ``{"visual": VisualAnalysis}`` partial-state dict.
     """
-    # PRE-TOOL: extract a deterministic palette before the LLM sees the
-    # image. This grounds the model in measured pixel facts, prevents
-    # hallucinated hex codes, and saves output tokens (the model has
-    # less to invent). When numpy/PIL is missing, the tool returns None
-    # and we fall back to LLM-only palette extraction.
+    # PRE-TOOL: extract a deterministic palette from the PRIMARY frame
+    # (first uploaded image). For multi-frame runs we still pre-measure
+    # only the first one — the LLM is told via the multi-frame note that
+    # palette findings are global and to call out drift it sees on the
+    # other frames. This keeps the pre-tool cheap (it does not scale
+    # with N) while still grounding the dominant palette.
     measured = call_tool("visual.extract_palette", image_path=state.image_path)
     user_text = visual_analysis_user(state)
     if measured and measured.get("palette"):
         user_text += (
             "\n\n<measured_facts>\n"
-            f"palette (k-means in CIELab, ground truth): "
+            f"palette (k-means in CIELab, ground truth, frame 1): "
             f"{', '.join(measured['palette'])}\n"
             "Use these as anchors for the palette field. Refine names "
             "and accents but do NOT change the hex codes — they were "
-            "measured from the actual image.\n"
+            "measured from the actual image. If the other frames show "
+            "different dominant colors, call that out as drift.\n"
             "</measured_facts>"
         )
         log.info("agent.visual: pre-tool palette=%s", measured["palette"])
+
+    # Multi-frame awareness: append the shared note when N>1 so every
+    # vision agent treats the frames as ONE coherent product. No-op for
+    # single-image runs (returns ""). Frame labels (filenames or user-
+    # supplied) are passed so the agent cites findings by label.
+    user_text += multi_image_note(len(state.image_paths), state.frame_labels)
 
     # Prompt construction lives in utils.prompts so iteration happens in one
     # file, not scattered across agents (the prompt registry is the seam).
@@ -109,7 +117,7 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, VisualAnalysis]:
         agent_name="agent.visual",
         system=visual_analysis_system(),
         user=user_text,
-        images=[Path(state.image_path)],
+        images=[Path(p) for p in state.image_paths],
         schema=VisualAnalysis,
         deps=deps,
     )

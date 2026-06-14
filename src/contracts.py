@@ -105,9 +105,17 @@ class VisionLLM(Protocol):
     ) -> BaseModel:
         """Run a vision completion that MUST validate against ``schema``.
 
-        ``images`` may be local file paths or ``data:image/png;base64,...``
-        URIs. Implementations resize down to a sane max-side before encoding
-        to keep token cost predictable (see ``tools.image_utils``).
+        ``images`` accepts 1..N entries — single-frame and multi-frame
+        comparison runs both flow through this method. Each entry may
+        be a local file path or a ``data:image/png;base64,...`` URI.
+        Implementations resize each image down to a sane max-side before
+        encoding to keep token cost predictable (see ``tools.image_utils``).
+
+        The product caps the user at 5 frames per run via the upload
+        preflight (`src.utils.safe_image.MAX_IMAGES_PER_RUN`); this
+        Protocol intentionally does not enforce that ceiling so library
+        callers (MCP clients, eval scripts, custom agents) remain free
+        to set their own policy.
         """
         ...
 

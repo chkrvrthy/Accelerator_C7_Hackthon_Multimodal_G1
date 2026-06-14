@@ -178,13 +178,20 @@ def _emergency_report(state: GraphState, reason: str) -> DesignReport:
                 )
             )
             p += 1
+    n_frames = len(state.image_paths)
+    multi_frame_note = (
+        f" Run covered {n_frames} frames "
+        f"({', '.join(state.frame_labels)})."
+        if n_frames > 1
+        else ""
+    )
     return DesignReport(
         overall_score=50.0,
         score_rationale=(
             "DEGRADED REPORT — the synthesizer agent failed during this run "
-            f"({reason}). Score is a neutral 50 placeholder. Specialist "
-            "outputs that succeeded are surfaced below; treat them as raw "
-            "signals and re-run the analysis."
+            f"({reason}).{multi_frame_note} Score is a neutral 50 "
+            "placeholder. Specialist outputs that succeeded are surfaced "
+            "below; treat them as raw signals and re-run the analysis."
         ),
         score_breakdown={},
         top_strengths=[
@@ -198,6 +205,12 @@ def _emergency_report(state: GraphState, reason: str) -> DesignReport:
         run_id=_uuid.uuid4().hex[:8],
         analyzed_at=datetime.now(UTC).isoformat(timespec="seconds"),
         analysis_status={**state.analysis_status, "synthesizer": "failed"},
+        # MULTI-FRAME: even in the degraded path we surface frame labels
+        # so the UI's frame strip and the per-frame heatmap know which
+        # screens were attempted. per_frame_scores stays empty because
+        # we have no per-frame signal when the synthesizer never ran.
+        frame_labels=list(state.frame_labels) if n_frames > 1 else [],
+        per_frame_scores={},
         visual=state.visual,
         ux=state.ux,
         accessibility=state.accessibility,
@@ -231,14 +244,38 @@ def build_graph(deps: AgentDeps) -> Any:
 
 
 def run_graph(
-    image_path: Path | str,
+    image_paths: Path | str | list[Path | str],
     *,
     instructions: str | None = None,
+    frame_labels: list[str] | None = None,
     deps: AgentDeps | None = None,
 ) -> DesignReport:
-    """Run the analysis end-to-end and return the synthesized report."""
+    """Run the analysis end-to-end and return the synthesized report.
+
+    ``image_paths`` accepts either:
+      - a single ``Path`` / ``str`` (legacy single-screen call site), or
+      - a list of paths for comparison-mode runs where every vision
+        agent sees all frames in one call.
+
+    ``frame_labels`` is the list of human-readable labels parallel to
+    ``image_paths`` (e.g. ``["Hero", "Pricing", "Dashboard"]``). When
+    omitted or shorter than the path list, missing entries fall back
+    to the filename stem so every frame always has a name the
+    synthesizer can cite.
+
+    All three shapes converge on the same ``GraphState`` (which keeps
+    ``image_path`` as the primary frame for single-image pre-tools).
+    """
     deps = deps or build_default_deps()
-    state = GraphState(image_path=str(image_path), instructions=instructions)
+    if isinstance(image_paths, (str, Path)):
+        paths = [str(image_paths)]
+    else:
+        paths = [str(p) for p in image_paths]
+    state = GraphState(
+        image_paths=paths,
+        frame_labels=list(frame_labels) if frame_labels else [],
+        instructions=instructions,
+    )
 
     compiled = build_graph(deps)
     if compiled is None:
@@ -257,13 +294,37 @@ def run_graph(
 # --------------------------------------------------------------------------- #
 def _cli() -> int:
     parser = argparse.ArgumentParser(description="Full graph end-to-end (Person A)")
-    parser.add_argument("--image", required=True)
+    parser.add_argument(
+        "--image",
+        required=True,
+        action="append",
+        help=(
+            "Path to a screenshot. Repeat the flag to send multiple frames "
+            "(comparison mode); the first frame is treated as primary by "
+            "single-image pre-tools."
+        ),
+    )
+    parser.add_argument(
+        "--label",
+        action="append",
+        default=None,
+        help=(
+            "Human-readable label for the corresponding --image (positional "
+            "match). Repeat once per --image. When omitted, the filename "
+            "stem is used as the label."
+        ),
+    )
     parser.add_argument("--instructions", default=None)
     parser.add_argument("--use-real", action="store_true", default=None)
     args = parser.parse_args()
 
     deps = build_default_deps(use_real=args.use_real)
-    report = run_graph(args.image, instructions=args.instructions, deps=deps)
+    report = run_graph(
+        args.image,
+        instructions=args.instructions,
+        frame_labels=args.label,
+        deps=deps,
+    )
     print(json.dumps(report.model_dump(), indent=2))
     return 0
 

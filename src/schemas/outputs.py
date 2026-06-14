@@ -220,6 +220,17 @@ class RetrievedRef(BaseModel):
     id: str
     score: float = Field(..., description="Similarity in [0, 1]. Higher is closer.")
     image_path: str = Field(..., description="Relative to data/reference for portability.")
+    matched_frames: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Frame labels (from GraphState.frame_labels) whose query "
+            "image surfaced this reference in the top-k. Empty for "
+            "single-frame runs and for legacy callers that don't pass "
+            "frame context. The brand agent uses this to attribute "
+            "drift findings to specific screens (e.g. 'Pricing matched "
+            "Stripe-pricing-2024 with score 0.83')."
+        ),
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -257,6 +268,10 @@ class Recommendation(BaseModel):
     - ``metric_lift`` is what an executive reads first.
     - ``proof`` keeps the synthesizer honest — it must cite the specialist
       and the finding it derived from. Without proof we are guessing.
+    - ``affected_frames`` is the multi-frame attribution. For multi-frame
+      runs the synthesizer MUST populate it with the frame label(s) the
+      finding applies to (e.g. ``["Pricing", "Checkout"]``). For
+      single-frame runs it stays empty — the one frame is implied.
 
     RESILIENCE: only ``title`` is truly required. Every other field has a
     sensible default so an LLM that omits one piece of metadata never
@@ -275,6 +290,15 @@ class Recommendation(BaseModel):
     proof: str | None = Field(
         default=None,
         description="Citation: '<agent>:<field>'. Example: 'accessibility:1.4.3'.",
+    )
+    affected_frames: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Frame labels (e.g. 'Hero', 'Pricing') the finding applies to. "
+            "Required for multi-frame runs; empty for single-frame. The UI "
+            "renders these as badges so a reviewer can see which screens "
+            "are affected at a glance."
+        ),
     )
 
     @model_validator(mode="after")
@@ -339,6 +363,27 @@ class DesignReport(BaseModel):
         ),
     )
 
+    # --- multi-frame attribution -------------------------------------- #
+    frame_labels: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ordered labels for every frame this report covers (e.g. "
+            "['Hero', 'Pricing', 'Dashboard']). Empty for single-frame "
+            "runs. Used by the UI to render thumbnail strips and to "
+            "validate Recommendation.affected_frames against."
+        ),
+    )
+    per_frame_scores: dict[str, dict[str, float]] = Field(
+        default_factory=dict,
+        description=(
+            "Per-frame sub-scores keyed by frame label, then by axis. "
+            "Each inner dict has at most these keys: 'overall', 'visual', "
+            "'ux', 'accessibility', 'brand', 'market', each clamped 0-100. "
+            "Empty for single-frame runs. Lets the UI render 'Pricing is "
+            "the weak link' style heatmaps."
+        ),
+    )
+
     # --- specialist payloads ------------------------------------------- #
     visual: VisualAnalysis | None = None
     ux: UXCritique | None = None
@@ -369,37 +414,33 @@ class DesignReport(BaseModel):
     def _clamp_breakdown(cls, v: dict[str, float]) -> dict[str, float]:
         return {k: max(0.0, min(100.0, float(score))) for k, score in v.items()}
 
+    @field_validator("per_frame_scores")
+    @classmethod
+    def _clamp_per_frame_scores(
+        cls, v: dict[str, dict[str, float]]
+    ) -> dict[str, dict[str, float]]:
+        # LOGIC: same clamp as score_breakdown but applied to each inner
+        # dict. We do not enforce keys — the LLM may emit only "overall"
+        # for some frames, or all six axes for others; the UI tolerates
+        # either shape. We DO clamp every value to 0-100 so a stray
+        # negative or 150 from the model never paints a broken bar.
+        out: dict[str, dict[str, float]] = {}
+        for frame_label, axes in v.items():
+            if not isinstance(axes, dict):
+                continue
+            out[frame_label] = {
+                k: max(0.0, min(100.0, float(s))) for k, s in axes.items()
+            }
+        return out
+
 
 # --------------------------------------------------------------------------- #
 # LangGraph state                                                              #
 # --------------------------------------------------------------------------- #
 
 
-class GraphState(BaseModel):
-    """The single mutable object LangGraph hands to every node.
-
-    Each agent reads what it needs and returns a *partial* dict; LangGraph
-    merges that dict back into the state. The five specialist agents only
-    write *their own* field, which is why parallel fan-out is safe — there
-    are no write conflicts.
-
-    HINT: the synthesizer is the only node that reads multiple agent fields.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    image_path: str
-    image_b64: str | None = None
-    instructions: str | None = None
-
-    visual: VisualAnalysis | None = None
-    ux: UXCritique | None = None
-    accessibility: AccessibilityReport | None = None
-    market: MarketResearch | None = None
-    brand: BrandConsistency | None = None
-
-    # Per-agent run status, populated by the orchestrator. The synthesizer
-    # reads it to know which axes to downweight in the overall score.
-    analysis_status: dict[str, AgentStatus] = Field(default_factory=dict)
-
-    report: DesignReport | None = None
+# GraphState (the runtime container LangGraph threads through every node)
+# lives in src/schemas/state.py to keep this file under the project's
+# 500-LOC budget. We re-export it here so existing imports
+# ``from src.schemas.outputs import GraphState`` keep working unchanged.
+from src.schemas.state import GraphState  # noqa: E402,F401  (re-export)

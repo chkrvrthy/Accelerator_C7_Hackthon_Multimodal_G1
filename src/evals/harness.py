@@ -67,10 +67,29 @@ _FIELD_TO_SCHEMA: dict[str, type[BaseModel]] = {
 
 
 def run_eval(case: GoldenCase, deps: AgentDeps | None = None) -> EvalResult:
-    """Run the graph on ``case`` and check schema validity per agent."""
+    """Run the graph on ``case`` and check schema validity per agent.
+
+    Multi-frame cases (``case.image_paths`` populated) flow through the
+    same harness — every per-agent schema is run against the report's
+    embedded specialist outputs, and the multi-frame contracts on the
+    final ``DesignReport`` (frame_labels, per_frame_scores) get a
+    standalone validity check below so a missing per-frame heatmap is
+    visible in the per-agent failure ledger.
+    """
     deps = deps or build_default_deps()
+    multi_frame = bool(case.image_paths)
     try:
-        report: DesignReport = run_graph(case.image_path, instructions=case.instructions, deps=deps)
+        if multi_frame:
+            report: DesignReport = run_graph(
+                case.image_paths,
+                instructions=case.instructions,
+                frame_labels=list(case.frame_labels) if case.frame_labels else None,
+                deps=deps,
+            )
+        else:
+            report = run_graph(
+                case.image_path, instructions=case.instructions, deps=deps
+            )
     except Exception as e:
         log.error("eval.run_eval failed for %s: %s", case.name, e)
         return EvalResult(case_name=case.name, error=str(e), pass_rate=0.0)
@@ -89,6 +108,23 @@ def run_eval(case: GoldenCase, deps: AgentDeps | None = None) -> EvalResult:
             # field — but the operator should see *which* one failed.
             log.warning("eval %s: %s failed schema check: %s", case.name, field, e)
             valid[field] = False
+
+    if multi_frame:
+        # MULTI-FRAME CONTRACT CHECK: the synthesizer is required to
+        # echo the canonical frame_labels back. per_frame_scores can be
+        # empty when the LLM dropped the field (warn, not fail), but a
+        # mismatched label set is a hard schema-level miss.
+        try:
+            assert report.frame_labels == list(case.frame_labels)
+            valid["multi_frame"] = True
+        except AssertionError:
+            log.warning(
+                "eval %s: multi_frame label echo failed: expected %s got %s",
+                case.name,
+                case.frame_labels,
+                report.frame_labels,
+            )
+            valid["multi_frame"] = False
 
     pass_rate = sum(valid.values()) / max(len(valid), 1)
     return EvalResult(case_name=case.name, schema_valid=valid, pass_rate=pass_rate)

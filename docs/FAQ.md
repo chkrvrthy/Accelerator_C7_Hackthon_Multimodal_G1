@@ -393,13 +393,74 @@ in `docs/DEMO_SCRIPT.md`, and the MCP tab in `docs/walkthrough.html`.
 
 ---
 
-## 8. Where do these answers live in the code?
+## 8. Multi-frame mode — what is it and when should I use it?
+
+**Short answer:** drop 2 to 5 screenshots of the SAME product into the
+Analyze tab and the team treats them as one coherent product. The
+synthesizer correlates findings across screens, names the affected
+frames in every recommendation, and emits a per-frame heatmap.
+
+### When multi-frame helps
+
+| Use case | Why it helps |
+| --- | --- |
+| Reviewing a full product surface (Landing → Signup → Dashboard) | The brand-consistency agent compares all frames against the same RAG corpus once; the synthesizer flags drift across screens (palette in one, type rhythm in another). |
+| Catching "Pricing is the weak link" | The per-frame heatmap shows a 0-100 score per axis per screen so the team can prioritise which page to ship first. |
+| Generating ticket-ready recommendations | `affected_frames` is rendered as a badge on every recommendation card — the engineer assigning the ticket knows which page to open. |
+
+### When NOT to use multi-frame
+
+- **Different products in one upload** — the system treats them as one
+  coherent product. The synthesizer will produce confused output. Run
+  each product as a separate analysis.
+- **Crops of the same screen** — multi-frame is for distinct screens
+  (Hero, Pricing, Checkout). Three zooms of the hero is a regression
+  on single-frame analysis: the agents see the SAME content three
+  times and waste tokens.
+- **Single screen review** — drop one frame, leave the labels textbox
+  blank. The pipeline detects single-frame and skips the per-frame
+  heatmap and `affected_frames` plumbing entirely.
+
+### Frame labels — when to type them, when to skip
+
+The optional "Frame labels" textbox names each screen so the report
+says *"Pricing has the contrast issue"* instead of *"frame 2 has the
+contrast issue"*. Two equally valid workflows:
+
+1. **Rename your files first** (Hero.png, Pricing.png, Dashboard.png).
+   The filename becomes the label automatically; leave the textbox
+   blank. This is the recommended path because filenames stay
+   meaningful even outside the report.
+2. **Type labels in the textbox**, one per line, in upload order.
+   Mismatched lengths are fine: too few labels → missing entries fall
+   back to filenames; too many → extras are ignored.
+
+### Cost shape
+
+Each frame is one image charge to the vision LLM. Five frames is the
+hard ceiling enforced by the upload preflight. The synthesizer is
+text-only so its cost stays constant regardless of frame count:
+
+| Frames | Approx. cost on `gpt-4o-mini` |
+| --- | --- |
+| 1 | ≈ $0.0035 |
+| 3 | ≈ $0.010 |
+| 5 (max) | ≈ $0.018 |
+
+Source: `src/utils/safe_image.MAX_IMAGES_PER_RUN` (the cap),
+`docs/COST_DISCIPLINE.md` (the maths).
+
+---
+
+## 9. Where do these answers live in the code?
 
 | Question | Source-of-truth file |
 | --- | --- |
 | Temperature reasoning | `src/config.py` (next to the field) |
 | Image-passing path | `src/llm/multimodal.py` (top docstring) |
-| Image upload safety | `src/utils/safe_image.py` (preflight + downsize) |
+| Image upload safety | `src/utils/safe_image.py` (preflight + downsize + 5-frame cap) |
+| Multi-frame data flow | `docs/ARCHITECTURE.md` "Data flow on one click of Run" + "Multi-frame contracts" |
+| Multi-frame schemas | `src/schemas/outputs.py` (`GraphState`, `RetrievedRef`, `Recommendation`, `DesignReport`) |
 | Multi-agent vs model-council | `src/agents/graph.py` (top docstring) + `select_model` in `src/llm/cost.py` |
 | Anti-hallucination policy | `src/utils/prompts/_shared.py` (`ANTI_HALLUCINATION_RULE`, `ABSTENTION_RULE`) + `tests/test_prompts.py` (regression-pinned) |
 | LangChain `@tool` registry | `src/agents/tools.py` + `tests/test_tools.py` |
@@ -407,6 +468,6 @@ in `docs/DEMO_SCRIPT.md`, and the MCP tab in `docs/walkthrough.html`.
 | Server-side logging contract | `src/agents/base.py::run_with_schema` + `ui/handlers.py::on_run` |
 | Client-side error banners | `ui/handlers.py::_classify_run_error` |
 | Cost telemetry | `src/llm/cost_tracker.py` + Settings tab in the UI |
-| Quality gate + retry | `src/agents/quality_gate.py` + `src/agents/synthesizer.py` (retry loop) |
+| Quality gate + retry | `src/agents/quality_gate.py` (now flags missing `per_frame_scores` for multi-frame) + `src/agents/synthesizer.py` (retry loop) |
 | Deployment | `README.md` "Deploy" section + `docs/DEPLOY_HF.md` + this FAQ |
 | MCP server purpose | `src/mcp/server.py` top docstring + this FAQ § 7 |

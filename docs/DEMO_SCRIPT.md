@@ -133,13 +133,22 @@ read state. Give it 90 seconds of attention.
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Hero band             | Rubric-friendly title + the five capability chips (Visual / UX / Accessibility / Brand / Market). Read this aloud once.     |
 | Steps strip           | Visual reminder of the flow (Upload → Add context → Review). Don't click — it's narrative scaffolding.                      |
-| Design screenshot     | File upload. Accepts PNG/JPG/WEBP. Drag-and-drop or click-to-browse.                                                        |
+| Design screenshots    | File upload — accepts **1 to 5** PNG/JPG/WEBP files, drag-and-drop or click-to-browse. Multiple files = comparison mode.    |
+| Frame labels          | Optional textbox, one label per line in upload order ("Hero" / "Pricing" / "Dashboard"). Missing → filename stem fallback.  |
 | Context               | Free-text notes: audience, brand, goal, market. **Every word here is fed to all five agents** — concrete words win.         |
 | Mode banner           | Read-only line beneath Run, shows whether `.env` has real APIs or fakes active. Switch by editing `.env`, not the UI.       |
 | Run analysis (button) | Kicks off the LangGraph DAG. Streams status back into the page.                                                             |
 | Try the bundled sample| Auto-fills the form with `src/fakes/fixtures/sample.png`. Useful if real upload fails — do not use for the real demo.       |
-| Good inputs / Output  | Two info cards on the right. They are pure documentation; no interaction.                                                   |
+| Do upload / Don't / What you'll get | Three info cards on the right. They are pure documentation; no interaction.                                   |
 | Raw structured report | Collapsed accordion below the run button. Expand only if a judge asks "show me the raw JSON".                               |
+
+> **Single-frame vs comparison mode (multi-frame)** — the Analyze tab
+> handles both with the same controls. Drop one screenshot for a fast
+> single-screen review; drop 2–5 of the same product (Hero, Pricing,
+> Dashboard, …) and the synthesizer correlates findings across screens
+> and emits a per-frame heatmap with `affected_frames` badges on every
+> recommendation. The 5-frame ceiling is enforced by the upload
+> preflight — try a 6th and you get a friendly banner, no token spend.
 
 #### D.2. Exact values to fill
 

@@ -238,22 +238,64 @@ body {
   margin-bottom: 6px;
 }
 
+/* Bold / strong / code elements inside any card must stay readable.
+   Without this rule, Gradio's stylesheet can leave <b>Brand</b>,
+   <code>@tool</code>, <code>.env</code> etc. with
+   ``-webkit-text-fill-color: transparent`` (its default for "code"
+   tokens it expects to highlight) and the text disappears. The
+   reference + settings cards already had a partial fallback;
+   extending to every prose container fixes the same class of bug
+   everywhere we render prose with inline emphasis. */
+.guide-card b,
+.guide-card strong,
 .settings-card b,
-.reference-card b {
+.settings-card strong,
+.reference-card b,
+.reference-card strong,
+.ui-help b,
+.ui-help strong,
+.ui-section-intro b,
+.ui-section-intro strong,
+.ui-subhead-note b,
+.ui-subhead-note strong {
   color: var(--ink) !important;
+  -webkit-text-fill-color: currentColor !important;
 }
 
+.guide-card code,
+.settings-card code,
+.reference-card code,
+.ui-help code,
+.ui-help-body code,
+.ui-section-intro code,
+.ui-subhead-note code {
+  color: var(--ink) !important;
+  -webkit-text-fill-color: currentColor !important;
+  background: var(--gold-soft, #fff5e6);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.guide-card a,
 .reference-card a,
-.settings-card a {
+.settings-card a,
+.ui-help a,
+.ui-section-intro a {
   color: #0b5f99 !important;
   font-weight: 700;
 }
 
+/* Compact 3-step strip (revised v2 — single-line summaries).
+   The body copy moved into ANALYZE_HELP_HTML, so each step is now
+   just a numbered chip with a label. Smaller padding, tighter row. */
 .steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin: 14px 0 22px;
+  gap: 12px;
+  margin: 8px 0 16px;
 }
 
 .step {
@@ -261,7 +303,7 @@ body {
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: #ffffff;
-  padding: 18px 18px 18px 56px;
+  padding: 12px 14px 12px 44px;
   box-shadow: var(--shadow-sm);
   transition: transform 200ms var(--ease), box-shadow 200ms var(--ease),
               border-color 200ms var(--ease);
@@ -275,36 +317,30 @@ body {
 .step::before {
   content: attr(data-step);
   position: absolute;
-  top: 18px;
-  left: 16px;
-  width: 28px;
-  height: 28px;
+  top: 10px;
+  left: 12px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: #ffffff;
   background: var(--teal);
-  box-shadow: 0 0 0 4px rgba(94, 58, 156, 0.14);
+  box-shadow: 0 0 0 3px rgba(94, 58, 156, 0.14);
 }
 
-.step.accent-coral::before { background: var(--coral); box-shadow: 0 0 0 4px rgba(216, 138, 71, 0.20); }
-.step.accent-gold::before  { background: var(--gold);  box-shadow: 0 0 0 4px rgba(184, 135, 24, 0.16); }
+.step.accent-coral::before { background: var(--coral); box-shadow: 0 0 0 3px rgba(216, 138, 71, 0.20); }
+.step.accent-gold::before  { background: var(--gold);  box-shadow: 0 0 0 3px rgba(184, 135, 24, 0.16); }
 
 .step b {
   display: block;
   color: var(--ink);
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.step span {
-  color: var(--soft-text);
-  font-size: 13px;
-  line-height: 1.5;
+  margin: 2px 0;
 }
 
 .accent-teal { border-left: 4px solid var(--teal); }
@@ -372,7 +408,8 @@ body {
 .upload-tip,
 .upload-tip p,
 .upload-tip em,
-.upload-tip span {
+.upload-tip span,
+.upload-tip li {
   color: var(--muted) !important;
   -webkit-text-fill-color: var(--muted) !important;
   font-style: normal !important;
@@ -380,6 +417,22 @@ body {
   font-size: 13px !important;
   line-height: 1.55 !important;
   opacity: 1 !important;
+}
+
+.upload-tip strong,
+.upload-tip b {
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  font-weight: 600 !important;
+}
+
+.upload-tip ul {
+  margin: 6px 0 0 18px !important;
+  padding: 0 !important;
+}
+
+.upload-tip li {
+  margin-bottom: 3px !important;
 }
 
 .upload-tip {
@@ -1283,4 +1336,411 @@ button.primary,
   border-color: var(--blue-dark) !important;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
+}
+
+/* === Settings: source badges + read-only tag ================ */
+/* These distinguish .env-editable settings from code-only and  */
+/* auto-computed values, so the user knows where to actually    */
+/* change something.                                            */
+.src-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  margin: 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family:
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.src-badge.env {
+  background: var(--green-soft);
+  color: #144d2e;
+  border-color: #6fb38b;
+}
+.src-badge.code {
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+  border-color: var(--blue);
+}
+.src-badge.auto {
+  background: var(--lavender-soft);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.settings-readonly-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--gold-soft);
+  color: var(--gold-dark);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  vertical-align: 3px;
+}
+
+.settings-card p {
+  margin: 6px 0 !important;
+  line-height: 1.65;
+}
+
+.settings-card p i {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+  margin-left: 4px;
+}
+
+/* === First-time tip accordion =============================== */
+/* Sits below the 3-step explainer and above the upload row.    */
+/* Closed by default; expanded on click. WCAG AAA contrast.     */
+.first-time-tip {
+  margin: 4px 0 18px;
+  padding: 10px 14px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-md);
+  color: var(--gold-dark);
+}
+.first-time-tip > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--gold-dark);
+  list-style: none;
+  outline: none;
+}
+.first-time-tip > summary::before {
+  content: "▸ ";
+  color: var(--gold-dark);
+  font-weight: 700;
+}
+.first-time-tip[open] > summary::before {
+  content: "▾ ";
+}
+.first-time-tip .first-time-body {
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.first-time-tip .first-time-body p {
+  margin: 0 0 6px;
+}
+.first-time-tip .first-time-body ul {
+  margin: 4px 0 0 18px;
+  padding: 0;
+}
+.first-time-tip .first-time-body li {
+  margin-bottom: 4px;
+}
+
+/* === Multi-frame report styling ============================== */
+/* Frame strip: chip row across the top of a multi-frame report   */
+.frames-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 10px 0 18px;
+  background: var(--lavender-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.frames-strip-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--soft-text);
+}
+.frames-strip-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.frame-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.frame-chip-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.frame-chip-label {
+  font-weight: 500;
+}
+
+/* Per-recommendation affected-frames badges */
+.frame-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+}
+.report-tag.tag-frame {
+  background: var(--lavender-soft);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+}
+
+/* Per-frame heatmap table */
+.per-frame-heatmap {
+  margin: 6px 0 18px;
+  overflow-x: auto;
+}
+.heatmap-table {
+  border-collapse: separate;
+  border-spacing: 4px;
+  width: 100%;
+}
+.heatmap-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--soft-text);
+  text-align: left;
+  padding: 4px 8px;
+}
+.heatmap-table th.row-label {
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  background: var(--lavender-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+.heatmap-table td.cell {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-weight: 600;
+  background: var(--green-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.heatmap-table td.cell.warn {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.heatmap-table td.cell.fail {
+  background: var(--coral-soft);
+  border-color: var(--coral);
+}
+.heatmap-table td.cell.empty {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  font-weight: 400;
+}
+.heatmap-table td.cell .cell-num {
+  font-size: 14px;
+}
+
+/* =========================================================================
+   UI v2 — info-glyph + collapsible help (replaces the old
+   always-visible right rail and per-field markdown blocks). The pattern
+   is: show one short line; gate the rationale behind <details>. This
+   keeps the form scannable but the docs one click away.
+   ========================================================================= */
+
+.info-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #ffffff !important;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: "Inter", system-ui, sans-serif;
+  letter-spacing: 0;
+  margin-right: 8px;
+  -webkit-text-fill-color: #ffffff !important;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(94, 58, 156, 0.18);
+}
+
+.ui-section-intro {
+  margin: 8px 0 14px;
+}
+
+.ui-section-intro h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink) !important;
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+.ui-section-intro p {
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+
+.ui-subhead {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink) !important;
+  margin: 22px 0 4px;
+  letter-spacing: -0.005em;
+}
+
+.ui-subhead-note {
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font-size: 13.5px;
+  margin: 0 0 10px;
+}
+
+/* Collapsed-by-default help disclosure. Click the row to expand. */
+.ui-help {
+  margin: 4px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fcfcff;
+  overflow: hidden;
+}
+
+.ui-help.inline {
+  background: transparent;
+  border: none;
+  margin: 4px 0 0;
+}
+
+.ui-help > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: currentColor !important;
+  user-select: none;
+}
+
+.ui-help.inline > summary {
+  padding: 4px 0;
+  font-size: 13.5px;
+  color: var(--teal-dark, #4d2f80) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.ui-help > summary::-webkit-details-marker { display: none; }
+.ui-help > summary::after {
+  content: "▸";
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--muted);
+  transition: transform 200ms var(--ease);
+}
+.ui-help.inline > summary::after {
+  margin-left: 8px;
+  padding-left: 0;
+}
+.ui-help[open] > summary::after { transform: rotate(90deg); }
+
+.ui-help[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.ui-help.inline[open] > summary {
+  border-bottom: none;
+}
+
+.ui-help-body {
+  padding: 14px 18px;
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ui-help-body p,
+.ui-help-body li {
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.ui-help-body ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+.ui-help-body li { margin-bottom: 5px; }
+
+/* 3-column grid inside the Analyze tab help disclosure (Do / Don't / Get) */
+.ui-help-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ui-help-col {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+.ui-help-col h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.ui-help-col ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.ui-help-col li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  margin-bottom: 4px;
+}
+
+.ui-help-col.accent-teal  { border-left: 3px solid var(--teal); }
+.ui-help-col.accent-coral { border-left: 3px solid var(--coral); }
+.ui-help-col.accent-gold  { border-left: 3px solid var(--gold); }
+
+@media (max-width: 900px) {
+  .ui-help-grid { grid-template-columns: 1fr; }
 }

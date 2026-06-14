@@ -62,6 +62,13 @@ MAX_PIXELS = 4_000_000
 # uses internally anyway. Going higher just inflates the data URL.
 MAX_LONG_EDGE_PX = 1024
 
+# Comparison-mode upload cap. Each vision agent sends ALL frames in one
+# call, so cost scales linearly with N. 5 frames keeps a real-API run
+# under ~$0.02 on gpt-4o-mini even with all 4 vision agents running and
+# is enough to cover the "hero + features + pricing + signup + footer"
+# walkthrough that the demo-script targets.
+MAX_IMAGES_PER_RUN = 5
+
 # Allowed file suffixes. We reject the rest with a friendly message
 # rather than discovering the failure deep inside the pipeline.
 ALLOWED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
@@ -176,6 +183,47 @@ def preflight_image(image_path: Path | str) -> Path:
         )
 
     return p
+
+
+def preflight_batch(image_paths: list[Path | str]) -> list[Path]:
+    """Validate a batch of uploads for comparison mode.
+
+    Returns the same list of paths on success. Raises :class:`UploadError`
+    on any of the batch-level failures below; per-file failures (size,
+    suffix, decoder) are delegated to :func:`preflight_image` and
+    surface with the same friendly copy.
+
+    Batch-level failures:
+      - empty list (caller should treat None upload as a separate state)
+      - more than ``MAX_IMAGES_PER_RUN`` frames
+
+    Per-file validation runs in input order so the user sees the first
+    bad file's title (e.g. "File too large") rather than a generic
+    batch-level error. We stop at the first failure on purpose — fixing
+    the batch usually means re-uploading anyway, and surfacing five
+    errors at once would just be noise.
+    """
+    if not image_paths:
+        raise UploadError(
+            user_title="Upload needed",
+            user_body=(
+                "Add at least one PNG or JPG screenshot. For multi-screen "
+                f"reviews you can attach up to {MAX_IMAGES_PER_RUN} frames at once."
+            ),
+            debug_detail="preflight_batch called with empty list",
+        )
+    if len(image_paths) > MAX_IMAGES_PER_RUN:
+        raise UploadError(
+            user_title="Too many screenshots",
+            user_body=(
+                f"This run has {len(image_paths)} screenshots; the limit "
+                f"is {MAX_IMAGES_PER_RUN} per analysis. Drop the extras and "
+                "try again — most product walkthroughs are covered by 3-5 "
+                "frames (hero, features, pricing, signup, dashboard)."
+            ),
+            debug_detail=f"batch size {len(image_paths)} > {MAX_IMAGES_PER_RUN}",
+        )
+    return [preflight_image(p) for p in image_paths]
 
 
 def downsize_for_pipeline(

@@ -25,14 +25,15 @@ chat panel (Claude Code, etc.) over a wire protocol.
 | `src/tools/web_search.py` | `TavilySearch`, `DuckDuckGoSearch`, default selector. |
 | `src/rag/editorial_refs.py` | Hand-curated fallback when web search returns empty. |
 | `ui/app.py` | Gradio Blocks entry point + `main()`. |
+| `ui/strings.py` | All static guide-card / tip / placeholder HTML strings used by `ui/app.py` (extracted to keep `app.py` focused on wiring; named `strings` not `copy` to avoid shadowing the stdlib `copy` module when launched as `python ui/app.py`). |
 | `ui/state.py` | Settings refresh + status / settings cards / telemetry. |
-| `ui/handlers.py` | `on_run` (Tab 1 streaming handler) + graceful error classifier. |
-| `ui/render.py` | Premium DesignReport HTML rendering. |
-| `ui/references.py` | References-tab payload (from-report + ad-hoc search). |
+| `ui/handlers.py` | `on_run` (multi-frame aware streaming handler) + graceful error classifier + `_resolve_frame_labels`. |
+| `ui/render.py` | Premium DesignReport HTML rendering — frame strip, per-frame heatmap, `affected_frames` badges. |
+| `ui/references.py` | References-tab payload (surfaces `matched_frames` per gallery item) + ad-hoc search. |
 | `ui/styles.py` + `ui/static/app.css` | App CSS (real .css file) + light-theme JS / HEAD. |
 | `app.py` (root) | HF Spaces entry shim — imports `ui.app:main`. |
 | `requirements.txt` (root) | HF Spaces dependency manifest. |
-| `src/mcp/server.py` | stdio MCP server with two tools. |
+| `src/mcp/server.py` | stdio MCP server with two tools (`analyze_design` accepts `image_paths` + `frame_labels`). |
 | `tests/person_e/*`, `tests/test_safe_image.py`, `tests/test_prompts.py`, `tests/test_editorial_refs.py` | Your test slice + new-feature tests you helped land. |
 
 ## Contracts you implement / consume
@@ -46,6 +47,15 @@ class WebSearch(Protocol):
 
 You **consume** `LLMClient` (and indirectly the compiled graph for the UI
 and MCP tools).
+
+### Multi-frame contract you exposed (UI + MCP)
+
+| Surface | Multi-frame entry point | Notes |
+| --- | --- | --- |
+| Gradio Analyze tab | `gr.File(file_count="multiple")` + `frame_labels_in` textbox | `_resolve_frame_labels` pads with filename stems; preflight caps at 5 |
+| MCP `analyze_design` | `image_paths: list[str]` + `frame_labels: list[str]` | Single-frame `image_path: str` still works (legacy) |
+| Market agent prompt | `<product_context>` block when N>1 frames | Anchors competitor / trend selection on full product surface |
+| References tab | `matched_frames` appended to gallery labels | Visible when N>1; empty for single-frame |
 
 ## Setup — first 5 minutes (do exactly this)
 

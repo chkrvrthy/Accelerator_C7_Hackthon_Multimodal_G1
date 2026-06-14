@@ -33,6 +33,7 @@ from src.utils.prompts._shared import (
     SELF_CHECK_RULE,
     TONE_HINT,
     TONE_RULE,
+    multi_image_note,
 )
 from src.utils.prompts.accessibility import accessibility_system, accessibility_user
 from src.utils.prompts.brand import brand_consistency_system, brand_consistency_user
@@ -55,6 +56,7 @@ __all__ = [
     "brand_consistency_system",
     "brand_consistency_user",
     "market_research_system",
+    "multi_image_note",
     "synthesizer_system",
     "ux_critique_system",
     "ux_critique_user",

@@ -56,7 +56,7 @@ from pathlib import Path
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
 from src.schemas.outputs import AccessibilityReport, GraphState
 from src.utils.logger import get_logger
-from src.utils.prompts import accessibility_system, accessibility_user
+from src.utils.prompts import accessibility_system, accessibility_user, multi_image_note
 
 log = get_logger(__name__)
 
@@ -107,11 +107,12 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, AccessibilityReport]:
     if measured_text:
         user_text += (
             "\n\n<measured_facts>\n"
-            f"smallest text region: ~{measured_text['smallest_text_px']} px\n"
-            f"median text region: ~{measured_text['median_text_px']} px\n"
-            f"largest text region: ~{measured_text['largest_text_px']} px\n"
+            f"smallest text region (frame 1): ~{measured_text['smallest_text_px']} px\n"
+            f"median text region (frame 1): ~{measured_text['median_text_px']} px\n"
+            f"largest text region (frame 1): ~{measured_text['largest_text_px']} px\n"
             "Use these as ground truth for WCAG 1.4.4 (resize text). "
-            "Do not invent different numbers.\n"
+            "Do not invent different numbers. If the other frames show "
+            "smaller body text, call that out as a per-frame finding.\n"
             "</measured_facts>"
         )
         log.info(
@@ -119,11 +120,16 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, AccessibilityReport]:
             measured_text,
         )
 
+    # Multi-frame awareness: tell the agent how to phrase per-frame vs
+    # global findings when N>1. No-op for single-image runs. Frame labels
+    # (filenames or user-supplied) are passed so the agent cites by label.
+    user_text += multi_image_note(len(state.image_paths), state.frame_labels)
+
     result = run_with_schema(
         agent_name="agent.accessibility",
         system=accessibility_system(),
         user=user_text,
-        images=[Path(state.image_path)],
+        images=[Path(p) for p in state.image_paths],
         schema=AccessibilityReport,
         deps=deps,
     )

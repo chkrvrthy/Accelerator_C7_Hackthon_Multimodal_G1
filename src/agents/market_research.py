@@ -64,7 +64,14 @@ log = get_logger(__name__)
 
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, MarketResearch]:
-    """Run the Market Research agent."""
+    """Run the Market Research agent.
+
+    Multi-frame awareness: this agent is text-only and never sees the
+    screenshots, but it does see how many frames + which screens were
+    reviewed so its competitor / trend selection is anchored on the
+    full product surface, not a single page. We add a short
+    ``<product_context>`` block to the user message when N>1 frames.
+    """
     query = state.instructions or "design competitors and trends"
     hits = deps.search.search(query, k=5)
 
@@ -79,9 +86,23 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, MarketResearch]:
         "</result>"
         for i, h in enumerate(hits)
     )
+    n_frames = len(state.image_paths)
+    product_context = ""
+    if n_frames > 1:
+        labels_csv = ", ".join(state.frame_labels)
+        product_context = (
+            "<product_context>"
+            f"Reviewer uploaded {n_frames} screens of one product "
+            f"({labels_csv}). Pick competitors that operate at the same "
+            "product surface (multi-page apps, not single-page utilities) "
+            "and frame trends across the whole journey, not just the "
+            "landing page."
+            "</product_context>\n"
+        )
     user_text = (
         "<query>" + query + "</query>\n"
-        "<results>\n" + snippets + "\n</results>\n"
+        + product_context
+        + "<results>\n" + snippets + "\n</results>\n"
         "<task>"
         "List 3-5 competitors and 3-5 trends grounded in the results. "
         "Use ONLY competitor names and URLs that appear in <results>. "

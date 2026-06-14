@@ -10,7 +10,7 @@ PIP ?= pip
 
 .PHONY: help \
         venv install install-a install-b install-c install-d install-e \
-        fmt lint todos clean \
+        fmt lint todos clean diagrams \
         test test-a test-b test-c test-d test-e test-real cov \
         run-a run-b run-c-visual run-c-brand run-d-ux run-d-a11y run-e-market \
         ui mcp ingest eval demo
@@ -41,6 +41,7 @@ help:
 	@echo "  mcp                Start stdio MCP server"
 	@echo "  ingest             Ingest data/reference/* into LanceDB"
 	@echo "  eval               Run the schema-validity eval harness"
+	@echo "  diagrams           Re-render docs/images/*.png from scripts/render_diagrams.py"
 	@echo "  demo               ingest + run-a + ui (one command)"
 	@echo "  clean              Remove caches and build artifacts"
 
@@ -149,5 +150,8 @@ ingest:
 
 eval:
 	$(PY) -m scripts.run_evals
+
+diagrams:
+	$(PY) scripts/render_diagrams.py
 
 demo: ingest run-a ui

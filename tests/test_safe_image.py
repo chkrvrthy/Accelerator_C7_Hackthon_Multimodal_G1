@@ -21,9 +21,11 @@ import pytest
 
 from src.fakes.fixtures import ensure_sample_design
 from src.utils.safe_image import (
+    MAX_IMAGES_PER_RUN,
     MAX_UPLOAD_BYTES,
     UploadError,
     downsize_for_pipeline,
+    preflight_batch,
     preflight_image,
 )
 
@@ -73,3 +75,35 @@ def test_upload_error_is_an_exception() -> None:
     assert isinstance(e, Exception)
     # __str__ joins title + body for log readability
     assert "t" in str(e) and "b" in str(e)
+
+
+def test_preflight_batch_passes_valid_set() -> None:
+    sample = ensure_sample_design()
+    out = preflight_batch([sample, sample, sample])
+    assert len(out) == 3
+    assert all(isinstance(p, Path) for p in out)
+
+
+def test_preflight_batch_rejects_empty_list() -> None:
+    with pytest.raises(UploadError) as ei:
+        preflight_batch([])
+    assert "Upload" in ei.value.user_title
+
+
+def test_preflight_batch_rejects_too_many_frames() -> None:
+    sample = ensure_sample_design()
+    paths = [sample] * (MAX_IMAGES_PER_RUN + 1)
+    with pytest.raises(UploadError) as ei:
+        preflight_batch(paths)
+    assert "Too many" in ei.value.user_title
+    # The body should mention the limit so the user knows what to remove.
+    assert str(MAX_IMAGES_PER_RUN) in ei.value.user_body
+
+
+def test_preflight_batch_propagates_per_file_failure() -> None:
+    sample = ensure_sample_design()
+    with pytest.raises(UploadError) as ei:
+        preflight_batch([sample, "/tmp/does-not-exist-please.png"])
+    # The per-file failure surfaces verbatim; we don't wrap it in a
+    # generic "batch error".
+    assert ei.value.user_title == "Upload missing"

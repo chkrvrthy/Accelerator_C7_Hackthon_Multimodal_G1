@@ -52,6 +52,7 @@ class LLMClient(Protocol):
     def complete(self, *, system, user, schema, model=None, temperature=None) -> BaseModel: ...
 
 class VisionLLM(Protocol):
+    # ``images`` accepts 1..5 paths; agents pass ``state.image_paths`` whole.
     def analyze(self, *, system, user, images, schema, model=None) -> BaseModel: ...
 
 class Retriever(Protocol):
@@ -61,6 +62,19 @@ class Retriever(Protocol):
 class WebSearch(Protocol):
     def search(self, query, k=5) -> list[SearchResult]: ...
 ```
+
+### Multi-frame fields you own (Hour 2 additions, additive only)
+
+| Field | Where | Default for legacy callers |
+| --- | --- | --- |
+| `GraphState.image_paths: list[str]` | every agent input | populated from `image_path` by validator |
+| `GraphState.frame_labels: list[str]` | every agent input | filename stems via validator |
+| `RetrievedRef.matched_frames: list[str]` | brand RAG output | `[]` for single-frame |
+| `Recommendation.affected_frames: list[str]` | every recommendation | `[]` for single-frame |
+| `DesignReport.frame_labels: list[str]` | report root | `[]` for single-frame |
+| `DesignReport.per_frame_scores: dict[str, dict[str, float]]` | report root | `{}` for single-frame |
+
+These are all **additive** — nothing breaks for existing single-image callers because every default is empty. The synthesizer scrubs hallucinated frame labels server-side against the canonical set.
 
 If you need to change one of these:
 1. Open a 2-line PR rationale.

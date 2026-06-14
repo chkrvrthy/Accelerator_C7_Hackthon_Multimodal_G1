@@ -5,6 +5,8 @@ OUTPUTS (written to ``docs/images/``):
     - architecture.png        — top-level flow user -> ui -> graph -> agents
     - agent_fanout.png        — five specialist branches into the synthesizer
     - run_dataflow.png        — sequence of events on one click of "Run"
+    - multi_frame_flow.png    — comparison-mode pipeline (1..5 frames in,
+                                  per-frame heatmap + affected_frames out)
 
 WHY THIS LIVES IN THE REPO
 --------------------------
@@ -12,7 +14,7 @@ README screenshots are nice but they go stale. A reproducible diagram
 script is graded as code: judges (or any future contributor) can run
 ``make diagrams`` and regenerate every figure deterministically. No
 external Python package is imported — only the system ``dot`` binary
-that ships with graphviz, which the project's ``Makefile`` checks for.
+that ships with graphviz.
 
 The pastel palette below is the PASTEL slot system used elsewhere in
 the project (UI, report rendering). Every (fill / text) pair clears
@@ -93,7 +95,12 @@ def _cluster(cid: str, title: str, slot: str, body_lines: list[str]) -> str:
 
 
 def _render(dot_src: str, out_path: Path, dpi: int = 160) -> None:
-    """Write ``dot_src`` to ``out_path.dot`` then run ``dot -Tpng`` on it."""
+    """Write ``dot_src`` to ``out_path.dot`` then run ``dot -Tpng`` on it.
+
+    The intermediate ``.dot`` source is removed after a successful PNG
+    render so committing only ships the final image. On failure the
+    ``.dot`` file is preserved so the operator can inspect it.
+    """
     dot_bin = shutil.which("dot")
     if dot_bin is None:
         sys.exit("error: graphviz `dot` not on PATH — `apt install graphviz`")
@@ -105,14 +112,26 @@ def _render(dot_src: str, out_path: Path, dpi: int = 160) -> None:
     if res.returncode != 0:
         sys.stderr.write(res.stderr.decode("utf-8", "replace"))
         sys.exit(res.returncode)
+    # Successful render — drop the intermediate .dot to keep the
+    # repo image dir clean. The script regenerates it on every run
+    # so there is no value in keeping it under version control.
+    dot_file.unlink(missing_ok=True)
     print(f"wrote {out_path.relative_to(REPO)} ({out_path.stat().st_size:,} B)")
 
 
 def architecture_diagram() -> str:
     """Top-level architecture: user -> ui -> graph -> agents -> report."""
     user_layer = [
-        _node("USER", "<B>User</B><BR/>screenshot + context note", "muted"),
-        _node("MCP_CLIENT", "<B>MCP client</B><BR/>(any AI coding agent)", "muted"),
+        _node(
+            "USER",
+            "<B>User</B><BR/>1..5 screenshots<BR/>+ optional frame labels<BR/>+ context note",
+            "muted",
+        ),
+        _node(
+            "MCP_CLIENT",
+            "<B>MCP client</B><BR/>analyze_design(<BR/>image_paths, frame_labels)",
+            "muted",
+        ),
     ]
     ui_layer = [
         _node("UI", "<B>Gradio UI</B><BR/>3 tabs &middot; Blocks layout", "lavender"),
@@ -120,7 +139,11 @@ def architecture_diagram() -> str:
         _node("HANDLERS", "<B>on_run + classify_run_error</B><BR/>graceful banners", "lavender"),
     ]
     orch = [
-        _node("ORCH", "<B>LangGraph orchestrator</B><BR/>parallel fan-out", "sky"),
+        _node(
+            "ORCH",
+            "<B>LangGraph orchestrator</B><BR/>parallel fan-out<BR/>state.image_paths + frame_labels",
+            "sky",
+        ),
     ]
     agents = [
         _node("VIS", "<B>Visual</B><BR/>palette + hierarchy", "mint"),
@@ -130,8 +153,8 @@ def architecture_diagram() -> str:
         _node("MK", "<B>Market</B><BR/>web-search grounded", "mint"),
     ]
     backends = [
-        _node("LLM", "<B>OpenRouter</B><BR/>multimodal + text", "peach"),
-        _node("RAG", "<B>Image RAG</B><BR/>CLIP + LanceDB", "peach"),
+        _node("LLM", "<B>OpenRouter</B><BR/>multimodal accepts<BR/>1..N images", "peach"),
+        _node("RAG", "<B>Image RAG</B><BR/>CLIP + LanceDB<BR/>per-frame retrieval", "peach"),
         _node("WEB", "<B>Web search</B><BR/>Tavily / DDG", "peach"),
     ]
     resilience = [
@@ -139,10 +162,18 @@ def architecture_diagram() -> str:
         _node("CACHE", "<B>Disk cache</B><BR/>sha256 keyed", "butter"),
     ]
     synth = [
-        _node("SYN", "<B>Synthesizer</B><BR/>+ quality gate retry", "lavender"),
+        _node(
+            "SYN",
+            "<B>Synthesizer</B><BR/>correlates across frames<BR/>+ quality gate retry",
+            "lavender",
+        ),
     ]
     output = [
-        _node("REPORT", "<B>DesignReport JSON</B>", "lavender"),
+        _node(
+            "REPORT",
+            "<B>DesignReport JSON</B><BR/>frame_labels + per_frame_scores<BR/>+ affected_frames per rec",
+            "lavender",
+        ),
     ]
 
     edges = [
@@ -197,20 +228,25 @@ def architecture_diagram() -> str:
 def fanout_diagram() -> str:
     """Detailed fan-out: pre-tools per agent, into synthesizer with retry."""
     state = [
-        _node("STATE", "<B>GraphState</B><BR/>image_path + instructions", "muted"),
+        _node(
+            "STATE",
+            "<B>GraphState</B><BR/>image_paths: list[str] (1..5)<BR/>"
+            "frame_labels: list[str]<BR/>instructions",
+            "muted",
+        ),
     ]
     pretools = [
-        _node("T_PAL", "<B>extract_palette</B><BR/>k-means in CIELab", "rose"),
-        _node("T_TXT", "<B>estimate_text_size</B><BR/>OpenCV CCA", "rose"),
-        _node("T_CTA", "<B>cta_density</B><BR/>keyword scan", "rose"),
-        _node("T_DE",  "<B>palette_distance</B><BR/>&#916;-E (CIELab)", "rose"),
+        _node("T_PAL", "<B>extract_palette</B><BR/>frame 1<BR/>k-means in CIELab", "rose"),
+        _node("T_TXT", "<B>estimate_text_size</B><BR/>frame 1<BR/>OpenCV CCA", "rose"),
+        _node("T_CTA", "<B>cta_density</B><BR/>frame 1<BR/>keyword scan", "rose"),
+        _node("T_DE",  "<B>palette_distance</B><BR/>frame 1<BR/>&#916;-E (CIELab)", "rose"),
     ]
     agents = [
-        _node("VIS",  "<B>visual</B><BR/>VisualAnalysis", "mint"),
-        _node("UX",   "<B>ux</B><BR/>UXCritique", "mint"),
-        _node("A11Y", "<B>accessibility</B><BR/>AccessibilityReport", "mint"),
-        _node("BR",   "<B>brand</B><BR/>BrandConsistency", "mint"),
-        _node("MK",   "<B>market</B><BR/>MarketResearch", "mint"),
+        _node("VIS",  "<B>visual</B><BR/>VisualAnalysis<BR/>(all frames)", "mint"),
+        _node("UX",   "<B>ux</B><BR/>UXCritique<BR/>(all frames)", "mint"),
+        _node("A11Y", "<B>accessibility</B><BR/>AccessibilityReport<BR/>(all frames)", "mint"),
+        _node("BR",   "<B>brand</B><BR/>BrandConsistency<BR/>+ matched_frames", "mint"),
+        _node("MK",   "<B>market</B><BR/>MarketResearch<BR/>+ product_context", "mint"),
     ]
     synth = [
         _node("SYN", "<B>synthesizer</B><BR/>de-dup + rank + score", "lavender"),
@@ -263,14 +299,23 @@ def fanout_diagram() -> str:
 def run_dataflow_diagram() -> str:
     """Linear sequence of events on one click of the Run button."""
     steps = [
-        ("S1", "<B>1. Upload</B><BR/>preflight + auto-resize", "rose"),
-        ("S2", "<B>2. AgentDeps</B><BR/>real or fake clients", "muted"),
-        ("S3", "<B>3. Pre-tools</B><BR/>palette / text / CTA / &#916;-E", "rose"),
-        ("S4", "<B>4. Fan-out</B><BR/>5 agents in parallel", "mint"),
-        ("S5", "<B>5. Synthesize</B><BR/>de-dup + rank + score", "lavender"),
-        ("S6", "<B>6. Quality gate</B><BR/>retry once if fail", "butter"),
-        ("S7", "<B>7. Cost ledger</B><BR/>tokens + USD + cache", "butter"),
-        ("S8", "<B>8. Render</B><BR/>premium HTML report", "sky"),
+        ("S1", "<B>1. Upload</B><BR/>1..5 frames<BR/>preflight + downsize", "rose"),
+        ("S2", "<B>2. Frame labels</B><BR/>resolve + pad with<BR/>filename stems", "muted"),
+        ("S3", "<B>3. AgentDeps</B><BR/>real or fake clients", "muted"),
+        ("S4", "<B>4. Pre-tools</B><BR/>palette / text / CTA / &#916;-E<BR/>(frame 1)", "rose"),
+        ("S5", "<B>5. Fan-out</B><BR/>5 agents in parallel<BR/>each sees ALL frames", "mint"),
+        (
+            "S6",
+            "<B>6. Synthesize</B><BR/>correlate across frames<BR/>+ per_frame_scores",
+            "lavender",
+        ),
+        ("S7", "<B>7. Quality gate</B><BR/>retry once if fail", "butter"),
+        ("S8", "<B>8. Cost ledger</B><BR/>tokens + USD + cache", "butter"),
+        (
+            "S9",
+            "<B>9. Render</B><BR/>frame strip + heatmap<BR/>+ affected_frames badges",
+            "sky",
+        ),
     ]
     nodes = [_node(sid, label, slot) for sid, label, slot in steps]
     edges = [
@@ -291,11 +336,158 @@ def run_dataflow_diagram() -> str:
     ])
 
 
+def multi_frame_flow_diagram() -> str:
+    """Comparison-mode pipeline: 1..5 frames -> agents -> heatmapped report.
+
+    This diagram tells the *story* of multi-frame mode. Where the
+    other diagrams answer "what's in the system?", this one answers
+    "what happens to those 3 screenshots from upload to badge?"
+    """
+    upload = [
+        _node("F1", "<B>Hero.png</B><BR/>frame 1", "muted"),
+        _node("F2", "<B>Pricing.png</B><BR/>frame 2", "muted"),
+        _node("F3", "<B>Dashboard.png</B><BR/>frame 3", "muted"),
+        _node(
+            "LBL",
+            "<B>frame_labels</B><BR/>['Hero','Pricing','Dashboard']<BR/>"
+            "padded from filenames",
+            "muted",
+        ),
+    ]
+    safety = [
+        _node(
+            "SAFE",
+            "<B>preflight_batch</B><BR/>5-frame ceiling<BR/>per-file 20 MB cap",
+            "rose",
+        ),
+        _node(
+            "RES",
+            "<B>downsize_for_pipeline</B><BR/>each &rarr; 1024 px max<BR/>~700 tok / frame",
+            "rose",
+        ),
+    ]
+    state = [
+        _node(
+            "GS",
+            "<B>GraphState</B><BR/>image_paths: 3 paths<BR/>frame_labels: 3 names",
+            "sky",
+        ),
+    ]
+    vision = [
+        _node(
+            "VIS",
+            "<B>visual</B><BR/>1 call &middot; 3 image parts<BR/>cites by label",
+            "mint",
+        ),
+        _node(
+            "UX",
+            "<B>ux</B><BR/>1 call &middot; 3 image parts<BR/>cites by label",
+            "mint",
+        ),
+        _node(
+            "A11Y",
+            "<B>accessibility</B><BR/>1 call &middot; 3 image parts<BR/>cites by label",
+            "mint",
+        ),
+    ]
+    brand = [
+        _node(
+            "BR_RAG",
+            "<B>brand RAG</B><BR/>retrieve_by_image &times; 3<BR/>"
+            "dedupe by ref id<BR/>matched_frames per ref",
+            "peach",
+        ),
+        _node(
+            "BR",
+            "<B>brand agent</B><BR/>1 call &middot; composite<BR/>"
+            "drift attributed by frame",
+            "mint",
+        ),
+    ]
+    market = [
+        _node(
+            "MK",
+            "<B>market</B><BR/>text-only<BR/>+ &lt;product_context&gt;",
+            "mint",
+        ),
+    ]
+    synth = [
+        _node(
+            "SYN",
+            "<B>synthesizer</B><BR/>CORRELATE across frames<BR/>"
+            "merge same root issue<BR/>scrub hallucinated labels",
+            "lavender",
+        ),
+    ]
+    report = [
+        _node(
+            "STRIP",
+            "<B>frame strip</B><BR/>Hero &middot; Pricing &middot; Dashboard",
+            "lavender",
+        ),
+        _node(
+            "HEAT",
+            "<B>per_frame_scores</B><BR/>heatmap (overall +<BR/>per-axis sub-scores)",
+            "lavender",
+        ),
+        _node(
+            "BADGE",
+            "<B>recommendations</B><BR/>affected_frames badges<BR/>"
+            "(e.g. 'Pricing','Dashboard')",
+            "lavender",
+        ),
+    ]
+
+    edges = [
+        '  F1 -> SAFE [color="#7A5BB8", penwidth=1.6];',
+        '  F2 -> SAFE [color="#7A5BB8", penwidth=1.6];',
+        '  F3 -> SAFE [color="#7A5BB8", penwidth=1.6];',
+        '  LBL -> GS [color="#857F95", penwidth=1.6, style=dashed];',
+        '  SAFE -> RES [color="#C16482", penwidth=1.8];',
+        '  RES -> GS [color="#7A5BB8", penwidth=2];',
+        '  GS -> VIS [color="#4F9C68", penwidth=1.8];',
+        '  GS -> UX [color="#4F9C68", penwidth=1.8];',
+        '  GS -> A11Y [color="#4F9C68", penwidth=1.8];',
+        '  GS -> BR_RAG [color="#4F9C68", penwidth=1.8];',
+        '  GS -> MK [color="#4F9C68", penwidth=1.8];',
+        '  BR_RAG -> BR [color="#D88A47", penwidth=1.6, label=<<FONT POINT-SIZE="10">refs + matched_frames</FONT>>];',
+        '  VIS -> SYN [color="#7A5BB8", penwidth=1.8];',
+        '  UX -> SYN [color="#7A5BB8", penwidth=1.8];',
+        '  A11Y -> SYN [color="#7A5BB8", penwidth=1.8];',
+        '  BR -> SYN [color="#7A5BB8", penwidth=1.8];',
+        '  MK -> SYN [color="#7A5BB8", penwidth=1.8];',
+        '  SYN -> STRIP [color="#7A5BB8", penwidth=2];',
+        '  SYN -> HEAT [color="#7A5BB8", penwidth=2];',
+        '  SYN -> BADGE [color="#7A5BB8", penwidth=2];',
+    ]
+
+    return "\n".join([
+        "digraph G {",
+        "  rankdir=LR;",
+        '  bgcolor="white";',
+        '  graph [splines=spline, nodesep=0.30, ranksep=0.95, fontname="Helvetica"];',
+        '  node  [fontname="Helvetica"];',
+        '  edge  [fontname="Helvetica", fontsize=10];',
+        _cluster("upload",  "&#128247; Upload (1..5 frames)",     "muted",   upload),
+        _cluster("safety",  "&#128274; Image safety gate",        "rose",    safety),
+        _cluster("state",   "&#128396; State assembly",           "sky",     state),
+        _cluster("vision",  "&#128101; Vision agents (parallel)", "mint",    vision),
+        _cluster("brand",   "&#127912; Brand RAG + agent",        "mint",    brand),
+        _cluster("market",  "&#128202; Market agent",             "mint",    market),
+        _cluster("synth",   "&#129504; Synthesizer (correlate)",  "lavender", synth),
+        _cluster("report",  "&#128221; Report (multi-frame UI)",  "lavender", report),
+        *edges,
+        "}",
+        "",
+    ])
+
+
 def main() -> int:
-    """Render all three diagrams to ``docs/images/*.png``."""
-    _render(architecture_diagram(),   OUT_DIR / "architecture.png",   dpi=160)
-    _render(fanout_diagram(),         OUT_DIR / "agent_fanout.png",   dpi=160)
-    _render(run_dataflow_diagram(),   OUT_DIR / "run_dataflow.png",   dpi=160)
+    """Render all four diagrams to ``docs/images/*.png``."""
+    _render(architecture_diagram(),     OUT_DIR / "architecture.png",     dpi=160)
+    _render(fanout_diagram(),           OUT_DIR / "agent_fanout.png",     dpi=160)
+    _render(run_dataflow_diagram(),     OUT_DIR / "run_dataflow.png",     dpi=160)
+    _render(multi_frame_flow_diagram(), OUT_DIR / "multi_frame_flow.png", dpi=160)
     print("\ndone — embed in README.md / docs/ARCHITECTURE.md as needed.")
     return 0
 

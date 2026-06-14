@@ -35,10 +35,54 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 
-def analyze_design_tool(image_path: str, instructions: str | None = None) -> dict[str, Any]:
-    """Run the full design-analysis graph on ``image_path``."""
-    log.info("mcp.analyze_design path=%s", image_path)
-    report = run_graph(Path(image_path), instructions=instructions)
+def analyze_design_tool(
+    image_path: str | None = None,
+    instructions: str | None = None,
+    *,
+    image_paths: list[str] | None = None,
+    frame_labels: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run the full design-analysis graph on one or more frames.
+
+    Args:
+        image_path: Single-frame path. Backwards-compatible with the
+            original MCP contract; ignored when ``image_paths`` is set.
+        instructions: Optional brief about audience / brand / goal.
+        image_paths: Multi-frame mode — 1..5 paths analysed as ONE
+            coherent product. When provided, ``image_path`` is ignored.
+        frame_labels: Optional human-readable labels parallel to
+            ``image_paths`` (e.g. ``["Hero", "Pricing", "Dashboard"]``).
+            Missing entries fall back to filename stems server-side.
+
+    Returns:
+        Serialized DesignReport dict including the new multi-frame
+        fields (``frame_labels``, ``per_frame_scores``,
+        ``top_recommendations[*].affected_frames``).
+
+    Raises:
+        ValueError: when neither ``image_path`` nor ``image_paths`` is set.
+    """
+    paths: list[str] | str
+    if image_paths:
+        paths = list(image_paths)
+        log.info(
+            "mcp.analyze_design paths=%d (multi-frame): %s",
+            len(paths),
+            ", ".join(paths),
+        )
+    elif image_path:
+        paths = image_path
+        log.info("mcp.analyze_design path=%s (single-frame)", image_path)
+    else:
+        raise ValueError(
+            "analyze_design_tool requires either image_path (str) or "
+            "image_paths (list[str])."
+        )
+    report = run_graph(
+        [Path(p) for p in paths] if isinstance(paths, list) else Path(paths),
+        instructions=instructions,
+        frame_labels=frame_labels,
+    )
     return report.model_dump()
 
 
@@ -63,9 +107,25 @@ def main() -> int:
     mcp = FastMCP("design-analysis-suite")
 
     @mcp.tool()
-    def analyze_design(image_path: str, instructions: str | None = None) -> dict[str, Any]:
-        """Run the full design-analysis graph on an uploaded image path."""
-        return analyze_design_tool(image_path, instructions)
+    def analyze_design(
+        image_path: str | None = None,
+        instructions: str | None = None,
+        image_paths: list[str] | None = None,
+        frame_labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run the full design-analysis graph on 1..5 frame(s).
+
+        Pass either ``image_path`` (single-frame, legacy) OR
+        ``image_paths`` (multi-frame). When multi-frame, attach optional
+        ``frame_labels`` so the report cites screens by name rather than
+        by index.
+        """
+        return analyze_design_tool(
+            image_path=image_path,
+            instructions=instructions,
+            image_paths=image_paths,
+            frame_labels=frame_labels,
+        )
 
     @mcp.tool()
     def search_designs(query: str, k: int = 5) -> list[dict[str, Any]]:

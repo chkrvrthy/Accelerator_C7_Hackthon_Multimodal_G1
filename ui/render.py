@@ -112,12 +112,25 @@ def _quick_wins_block(report: DesignReport) -> str:
 
 
 def _recommendation_card(r: Any) -> str:
-    """Render one premium recommendation card with priority chip + meta row."""
+    """Render one premium recommendation card with priority chip + meta row.
+
+    For multi-frame runs the card also surfaces ``affected_frames`` as
+    badges next to the title so a reviewer can scan "which screens are
+    affected" without reading the rationale.
+    """
     e = html.escape
+    affected = list(getattr(r, "affected_frames", None) or [])
+    frame_badges = ""
+    if affected:
+        chips = "".join(
+            f'<span class="report-tag tag-frame">{e(label)}</span>' for label in affected
+        )
+        frame_badges = f'<span class="frame-badges">{chips}</span>'
     parts = [
         '<div class="priority-row">',
         f'<span class="report-tag tag-priority">{r.priority}</span>',
         f"<b>{e(r.title)}</b>",
+        frame_badges,
         "</div>",
         f'<p class="rationale-text">{e(r.rationale)}</p>',
         '<div class="meta-row">',
@@ -130,6 +143,85 @@ def _recommendation_card(r: Any) -> str:
     if r.proof:
         parts.append(f'<span class="proof">Source · {e(r.proof)}</span>')
     return "".join(parts)
+
+
+def _frames_strip(frame_labels: list[str]) -> str:
+    """Render the labelled frame strip at the top of a multi-frame report."""
+    if not frame_labels or len(frame_labels) <= 1:
+        return ""
+    chips = "".join(
+        f'<span class="frame-chip"><span class="frame-chip-num">{i + 1}</span>'
+        f"<span class=\"frame-chip-label\">{html.escape(label)}</span></span>"
+        for i, label in enumerate(frame_labels)
+    )
+    return (
+        '<div class="frames-strip">'
+        '<span class="frames-strip-label">Frames reviewed</span>'
+        f'<div class="frames-strip-chips">{chips}</div>'
+        "</div>"
+    )
+
+
+def _per_frame_heatmap(
+    frame_labels: list[str],
+    per_frame_scores: dict[str, dict[str, float]],
+) -> str:
+    """Render a small per-frame heatmap when the synthesizer populated it.
+
+    Layout: one row per frame label (in the order they appear in
+    ``frame_labels``, not dict insertion order), columns for each axis
+    the synthesizer chose to score. Empty axes are simply absent — we
+    do not pad with zeros because a missing axis is not the same as 0.
+    """
+    if not frame_labels or len(frame_labels) <= 1 or not per_frame_scores:
+        return ""
+
+    # Discover the union of axes present anywhere, but always lead with
+    # 'overall' when present so the eye lands there first.
+    axes_seen: list[str] = []
+    for label in frame_labels:
+        for axis in (per_frame_scores.get(label) or {}).keys():
+            if axis not in axes_seen:
+                axes_seen.append(axis)
+    ordered_axes: list[str] = []
+    if "overall" in axes_seen:
+        ordered_axes.append("overall")
+    for canonical in ("visual", "ux", "accessibility", "brand", "market"):
+        if canonical in axes_seen and canonical not in ordered_axes:
+            ordered_axes.append(canonical)
+    for extra in axes_seen:
+        if extra not in ordered_axes:
+            ordered_axes.append(extra)
+
+    if not ordered_axes:
+        return ""
+
+    head_cells = "".join(f"<th>{html.escape(a)}</th>" for a in ordered_axes)
+    rows: list[str] = []
+    for label in frame_labels:
+        scores = per_frame_scores.get(label) or {}
+        cells: list[str] = []
+        for axis in ordered_axes:
+            value = scores.get(axis)
+            if value is None:
+                cells.append('<td class="cell empty">—</td>')
+                continue
+            cls = _bar_class(float(value))
+            cells.append(
+                f'<td class="cell {cls}"><span class="cell-num">{float(value):.0f}</span></td>'
+            )
+        rows.append(
+            f'<tr><th class="row-label">{html.escape(label)}</th>{"".join(cells)}</tr>'
+        )
+
+    return (
+        '<div class="per-frame-heatmap">'
+        '<table class="heatmap-table">'
+        f"<thead><tr><th></th>{head_cells}</tr></thead>"
+        f'<tbody>{"".join(rows)}</tbody>'
+        "</table>"
+        "</div>"
+    )
 
 
 def render_report(report: DesignReport | dict[str, Any] | None) -> str:
@@ -234,12 +326,22 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
 
     parts.append(hero)
 
+    # --- multi-frame: labelled strip + per-frame heatmap ------------ #
+    parts.append(_frames_strip(report.frame_labels))
+
     # --- per-axis breakdown bars ------------------------------------- #
     if report.score_breakdown or any(
         getattr(report, k) is not None for k in ("visual", "ux", "accessibility", "brand", "market")
     ):
         parts.append("<h3>Per-axis breakdown</h3>")
         parts.append(_breakdown_bars(report.score_breakdown))
+
+    # Per-frame heatmap lives directly under the global breakdown so the
+    # eye's progression is global -> per-frame -> per-axis recommendations.
+    heatmap_html = _per_frame_heatmap(report.frame_labels, report.per_frame_scores)
+    if heatmap_html:
+        parts.append("<h3>Per-frame breakdown</h3>")
+        parts.append(heatmap_html)
 
     # --- agent run status -------------------------------------------- #
     if report.analysis_status:

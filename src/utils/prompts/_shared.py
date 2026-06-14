@@ -181,3 +181,62 @@ AUDIENCE_RULE = dedent(
     - Write so the team does not have to rewrite you.
     """
 )
+
+
+def multi_image_note(
+    n_images: int, frame_labels: list[str] | None = None
+) -> str:
+    """Return a user-prompt snippet to add when the agent is seeing N>1 frames.
+
+    Returns "" for the single-image case so existing prompts are unchanged.
+    For comparison mode (N>=2), tells every vision agent that the frames
+    represent ONE coherent product (different sections / pages of the same
+    site or app) and how to phrase findings that are global vs frame-specific.
+
+    Frame labels (when provided) are the human-readable names the user
+    typed in the UI ("Hero", "Pricing", "Checkout"). The agent is told
+    to cite findings by label, NOT by index, so the resulting report
+    reads as a real review ticket. When ``frame_labels`` is None or
+    blank, falls back to "Frame 1 / Frame 2 / Frame N" indices.
+
+    This snippet is appended verbatim to each vision agent's user message
+    by the agent's run() function. Keeping it short and shared means the
+    A/B-able copy lives in exactly one file.
+    """
+    if n_images <= 1:
+        return ""
+    if frame_labels and len(frame_labels) >= n_images:
+        labels = [str(label).strip() or f"Frame {i + 1}" for i, label in enumerate(frame_labels)]
+    else:
+        labels = [f"Frame {i + 1}" for i in range(n_images)]
+    bullet_lines = "\n".join(f"          {i + 1}. {label}" for i, label in enumerate(labels))
+    return dedent(
+        f"""\
+
+        <multi_frame_context>
+        You are seeing {n_images} screens of the SAME product (different
+        sections, pages, or states of the same site or app). They are
+        labelled — cite them by label, not by index — as follows
+        (in upload order):
+{bullet_lines}
+
+        Treat the screens collectively as ONE coherent product, NOT as
+        separate products.
+
+        - When a finding applies to all frames, do NOT prefix it with a
+          label — write it as a global observation.
+        - When a finding is specific to one or more frames, name them
+          explicitly: "Pricing: hero CTA contrast 2.8:1", "Checkout and
+          Hero: secondary buttons drift to grey-on-grey".
+        - Palette, typography, and brand-consistency findings are global
+          by default; call out drift across frames as a finding when
+          you see it.
+        - Heuristic violations and accessibility audits are typically
+          per-frame; name the affected screens when issues differ.
+        - Severity is anchored on the WORST instance across frames, not
+          averaged.
+        - The downstream synthesizer will produce ONE coherent report
+          covering all frames — do not produce N separate analyses.
+        </multi_frame_context>
+        """
+    ).rstrip()

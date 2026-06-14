@@ -112,13 +112,26 @@ def brand_consistency_user(refs: list[RetrievedRef]) -> str:
     grounded in the retrieval result.
     """
     if refs:
-        ref_lines = "\n".join(
-            f"  <ref id='{r.id}' similarity='{r.score:.2f}' image='{r.image_path}' />"
-            for r in refs
-        )
+        # When the run is multi-frame, surface which frames surfaced each
+        # ref so the LLM can phrase drift findings against specific
+        # screens ("Pricing matched stripe-pricing-2024 at 0.83; Hero
+        # had no comparable ref"). Single-frame runs leave the attribute
+        # empty and the LLM treats the candidate generically.
+        def _line(r: RetrievedRef) -> str:
+            base = (
+                f"  <ref id='{r.id}' similarity='{r.score:.2f}' "
+                f"image='{r.image_path}'"
+            )
+            if r.matched_frames:
+                base += f" matched_frames='{','.join(r.matched_frames)}'"
+            return base + " />"
+
+        ref_lines = "\n".join(_line(r) for r in refs)
         ref_block = (
             "<retrieved_refs note='descending similarity, "
-            "cite ids only from this list'>\n"
+            "cite ids only from this list. matched_frames lists which "
+            "uploaded screens surfaced this ref; cite those screen "
+            "labels in drift findings when relevant.'>\n"
             f"{ref_lines}\n"
             "</retrieved_refs>"
         )

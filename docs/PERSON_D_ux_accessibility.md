@@ -30,11 +30,28 @@ a measured value. The LLM never overrides a measured number.
 
 ```python
 class VisionLLM(Protocol):
+    # ``images`` accepts 1..5 paths — pass state.image_paths whole.
     def analyze(self, *, system, user, images, schema, model=None) -> BaseModel: ...
 ```
 
 That is it. No retriever, no web search, no special seams. Your slice is the
 purest example of "give the model an image, ask for typed JSON".
+
+### Multi-frame contract (already wired)
+
+Both your agents receive every uploaded frame in one call. Your prompts
+already append `multi_image_note(len(state.image_paths), state.frame_labels)`
+to the user message so the LLM:
+
+- treats all frames as ONE coherent product (no N separate critiques);
+- cites per-screen findings by **label** (e.g. "Pricing: form labels
+  missing focus ring"), not by index;
+- anchors severity on the WORST instance across frames, not the average.
+
+Your output (`UXCritique` / `AccessibilityReport`) is unchanged — frame
+attribution lives on the synthesizer's `Recommendation.affected_frames`,
+which derives from your evidence text. Keep evidence specific enough
+that the synthesizer can pick out the affected screen.
 
 ## Setup — first 5 minutes (do exactly this)
 

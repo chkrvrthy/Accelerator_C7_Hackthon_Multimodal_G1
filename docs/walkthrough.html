@@ -160,7 +160,7 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
 <section id="tab-cover" class="tab active">
   <div class="hero">
     <h2>5 specialist AI agents review your UI design &mdash; in parallel.</h2>
-    <p class="lede">Upload a screenshot. A LangGraph orchestrator fans out to Visual, UX, Accessibility, Brand-Consistency, and Market-Research agents. Image RAG (CLIP + LanceDB) grounds the brand review against an in-house corpus. Deterministic <em>pre-tools</em> (k-means palette, OpenCV text-size, CTA density, &Delta;-E palette distance) feed each agent <code>&lt;measured_facts&gt;</code> so the LLM never has to invent numbers. A synthesizer aggregates everything into one prioritized DesignReport, gated by a pure-Python quality check that re-prompts once on regressions. Same flow callable from any MCP-compatible coding agent.</p>
+    <p class="lede">Upload <strong>1 to 5 screenshots</strong> of the same product. A LangGraph orchestrator fans out to Visual, UX, Accessibility, Brand-Consistency, and Market-Research agents &mdash; each vision agent sees every frame in one call, so the team treats the upload as <em>one coherent product</em>. Image RAG (CLIP + LanceDB) queries every frame and dedupes against an in-house corpus, surfacing which screen surfaced each ref. Deterministic <em>pre-tools</em> (k-means palette, OpenCV text-size, CTA density, &Delta;-E palette distance) feed each agent <code>&lt;measured_facts&gt;</code> so the LLM never has to invent numbers. A synthesizer aggregates everything into one prioritized DesignReport with <code>per_frame_scores</code> heatmap and <code>affected_frames</code> attribution, gated by a pure-Python quality check that re-prompts once on regressions. Same flow callable from any MCP-compatible coding agent.</p>
     <div class="cta">
       <button class="btn" onclick="go('architecture')">Start the tour &rarr;</button>
       <button class="btn ghost" onclick="go('sequence')">Jump to sequence</button>
@@ -546,31 +546,34 @@ sequenceDiagram
     participant L as VisionLLM/LLM&lt;br/&gt;Person A
     participant SY as Synthesizer&lt;br/&gt;Person A
 
-    U->>UI: drop dashboard.png + Run
-    UI->>G: run_graph(image_path, instructions)
-    note over G: build_default_deps(use_real=True)&lt;br/&gt;compile StateGraph
+    U->>UI: drop 1..5 PNG/JPG + labels + Run
+    UI->>G: run_graph(image_paths, instructions, frame_labels)
+    note over G: build_default_deps(use_real=True)&lt;br/&gt;compile StateGraph&lt;br/&gt;pad frame_labels with filename stems
 
-    par parallel fan-out at START
+    par parallel fan-out at START — every vision agent sees ALL frames
         G->>V: await run(state, deps)
-        V->>L: vision.analyze(image, schema=VisualAnalysis)
-        L-->>V: VisualAnalysis
+        V->>L: vision.analyze(images=N, schema=VisualAnalysis)
+        L-->>V: VisualAnalysis (cites frames by label)
     and
         G->>UX: await run(state, deps)
-        UX->>L: vision.analyze(image, schema=UXCritique)
+        UX->>L: vision.analyze(images=N, schema=UXCritique)
         L-->>UX: UXCritique
     and
         G->>AC: await run(state, deps)
-        AC->>L: vision.analyze(image, schema=AccessibilityReport)
+        AC->>L: vision.analyze(images=N, schema=AccessibilityReport)
         L-->>AC: AccessibilityReport
     and
         G->>BR: await run(state, deps)
-        BR->>R: retrieve_by_image(image, k=4)
-        R-->>BR: list of RetrievedRef
+        loop for each frame
+            BR->>R: retrieve_by_image(frame_i, k=5)
+            R-->>BR: list of RetrievedRef
+        end
+        note over BR: dedupe by id; record matched_frames; top-5 global
         BR->>L: vision.analyze(composite, schema=BrandConsistency)
         L-->>BR: BrandConsistency
     and
         G->>MR: await run(state, deps)
-        MR->>W: search(query)
+        MR->>W: search(query + product_context)
         W-->>MR: list of SearchResult
         MR->>L: llm.complete(summary + hits, schema=MarketResearch)
         L-->>MR: MarketResearch
@@ -583,12 +586,14 @@ sequenceDiagram
     MR-->>G: market
 
     G->>SY: await run(state, deps)
-    SY->>L: llm.complete(all 5 outputs, schema=DesignReport)
-    L-->>SY: DesignReport
+    note over SY: synthesizer sees frame_labels in&lt;br/&gt;&lt;multi_frame_synthesis&gt; user block
+    SY->>L: llm.complete(5 outputs + labels, schema=DesignReport)
+    L-->>SY: DesignReport with per_frame_scores&lt;br/&gt;+ affected_frames per recommendation
+    note over SY: scrub hallucinated labels server-side&lt;br/&gt;against canonical state.frame_labels
     SY-->>G: report
 
     G-->>UI: DesignReport JSON streamed
-    UI-->>U: render Tab 2 + save data/reports/&lt;ts&gt;.json
+    UI-->>U: render Report tab (frame strip + heatmap + affected_frames badges)&lt;br/&gt;+ save data/reports/&lt;ts&gt;.json
     </pre>
   </div>
 
@@ -602,21 +607,24 @@ sequenceDiagram
       <span class="badge badge-e">Person E</span>
       <span class="chev">&#9660;</span>
     </summary><div class="step-body">
-      <p>The Gradio file uploader hands a path to <code>on_run</code>. <em>Before any tokens are spent</em>, we run a pre-flight safety check: validates suffix, file size (&le; 20 MB), and pixel count (&le; 4 MP), and downsizes to 1024 px on the long edge. <code>UploadError</code> is the only non-Exception path; everything else gets wrapped in a wide try/except that yields a friendly banner via <code>_classify_run_error</code>.</p>
+      <p>The Gradio file uploader hands a list of 1..5 paths to <code>on_run</code>, plus an optional newline-separated <code>frame_labels_text</code>. <em>Before any tokens are spent</em>, we run <code>preflight_batch</code>: validates count (&le; 5), suffix, file size (&le; 20 MB each), and pixel count, then downsizes each frame to 1024 px on the long edge. <code>UploadError</code> is the only non-Exception path; everything else gets wrapped in a wide try/except that yields a friendly banner via <code>_classify_run_error</code>.</p>
       <div class="filepath"><code>ui/handlers.py</code><button class="copy-btn" data-copy="ui/handlers.py">Copy</button></div>
-<pre><code class="language-python">def on_run(image, instructions):
+<pre><code class="language-python">def on_run(image, instructions, frame_labels_text=""):
     # 1. Image safety gate — preflight + auto-resize before any LLM call.
+    raw_paths = _normalize_uploads(image)              # accepts list or single
     try:
-        preflight_image(raw_path)
-        image_path = downsize_for_pipeline(raw_path)
+        preflight_batch(raw_paths)                     # caps at 5, per-file checks
+        image_paths = [downsize_for_pipeline(p) for p in raw_paths]
     except UploadError as e:
         yield (_status_message(e.user_title, e.user_body), {}, None); return
 
+    labels = _resolve_frame_labels(frame_labels_text, image_paths)  # padded with stems
     use_real = _default_real_mode()
     deps = build_default_deps(use_real=use_real)
     get_cost_tracker().reset()
     try:
-        report = run_graph(image_path, instructions=instructions or None, deps=deps)
+        report = run_graph(image_paths, instructions=instructions or None,
+                           frame_labels=labels, deps=deps)
         yield (_status_message("Report ready", ...), report.model_dump(), report.model_dump())
     except Exception as e:
         title, body = _classify_run_error(e)         # CircuitOpenError -> friendly banner
@@ -629,15 +637,20 @@ sequenceDiagram
       <span class="badge badge-shared">E &rarr; A</span>
       <span class="chev">&#9660;</span>
     </summary><div class="step-body">
-      <p>The UI hands off to Person A's orchestrator. From here, all logic runs in the graph.</p>
+      <p>The UI hands off to Person A's orchestrator. From here, all logic runs in the graph. Single-frame and multi-frame both flow through the same entry point — the orchestrator just looks at <code>len(image_paths)</code>.</p>
       <div class="filepath"><code>src/agents/graph.py</code><button class="copy-btn" data-copy="src/agents/graph.py">Copy</button></div>
-<pre><code class="language-python">async def run_graph(image_path: Path, *, instructions: str | None = None,
-                    deps: AgentDeps | None = None) -> DesignReport:
-    deps = deps or build_default_deps(use_real=True)
-    state = GraphState(image_path=image_path, instructions=instructions,
-                       image_b64=encode_image_to_data_url(image_path))
+<pre><code class="language-python">def run_graph(image_paths, *, instructions=None, frame_labels=None,
+              deps=None) -> DesignReport:
+    deps = deps or build_default_deps()
+    paths = ([str(image_paths)] if isinstance(image_paths, (str, Path))
+             else [str(p) for p in image_paths])
+    state = GraphState(image_paths=paths,
+                       frame_labels=list(frame_labels) if frame_labels else [],
+                       instructions=instructions)
+    # GraphState validator pads frame_labels with filename stems and
+    # mirrors image_path = image_paths[0] for legacy single-image pre-tools.
     compiled = build_graph(deps)
-    final = await compiled.ainvoke(state)
+    final = compiled.invoke(state)
     return final["report"]</code></pre>
     </div></details></li>
 

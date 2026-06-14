@@ -76,6 +76,82 @@ def test_graph_state_partial_validates():
     assert s.visual is None and s.report is None
 
 
+def test_graph_state_image_path_populates_image_paths():
+    # Back-compat: legacy callers pass image_path="x.png"; the model
+    # validator should mirror that into image_paths so vision agents
+    # always have a list to iterate.
+    s = GraphState(image_path="x.png")
+    assert s.image_paths == ["x.png"]
+    assert s.image_path == "x.png"
+
+
+def test_graph_state_image_paths_populates_image_path():
+    # New comparison-mode callers pass image_paths=[...]; image_path
+    # becomes the primary (first) frame so single-image pre-tools work.
+    s = GraphState(image_paths=["a.png", "b.png", "c.png"])
+    assert s.image_paths == ["a.png", "b.png", "c.png"]
+    assert s.image_path == "a.png"
+
+
+def test_graph_state_requires_at_least_one_image():
+    with pytest.raises(ValidationError):
+        GraphState()
+
+
+def test_graph_state_frame_labels_default_to_filename_stem():
+    # When the caller omits frame_labels every entry falls back to the
+    # filename stem so downstream agents always have a name to cite.
+    s = GraphState(image_paths=["data/uploads/Hero.png", "data/uploads/Pricing.jpg"])
+    assert s.frame_labels == ["Hero", "Pricing"]
+
+
+def test_graph_state_frame_labels_partial_input_padded():
+    # When the caller supplies some labels but not all, the missing
+    # ones fill from filenames so the output is always parallel to
+    # image_paths.
+    s = GraphState(
+        image_paths=["a.png", "b.png", "c.png"],
+        frame_labels=["Hero", ""],
+    )
+    assert s.frame_labels == ["Hero", "b", "c"]
+
+
+def test_recommendation_affected_frames_defaults_empty():
+    r = Recommendation(title="Raise contrast")
+    assert r.affected_frames == []
+
+
+def test_design_report_per_frame_scores_are_clamped():
+    # The clamp validator must coerce out-of-range values to [0, 100]
+    # so a stray 150 from the LLM never paints a broken bar.
+    rep = DesignReport(
+        per_frame_scores={
+            "Hero": {"overall": 78.0, "visual": 82.0},
+            "Pricing": {"overall": 150.0, "ux": -10.0},
+        }
+    )
+    assert rep.per_frame_scores["Hero"]["overall"] == 78.0
+    assert rep.per_frame_scores["Pricing"]["overall"] == 100.0
+    assert rep.per_frame_scores["Pricing"]["ux"] == 0.0
+
+
+def test_design_report_carries_frame_labels_field():
+    rep = DesignReport(
+        frame_labels=["Hero", "Pricing", "Dashboard"],
+        top_recommendations=[
+            Recommendation(
+                title="Raise CTA contrast",
+                effort="S",
+                impact="L",
+                affected_frames=["Pricing", "Dashboard"],
+            ),
+        ],
+    )
+    # Per-recommendation affected_frames are preserved verbatim.
+    assert rep.top_recommendations[0].affected_frames == ["Pricing", "Dashboard"]
+    assert rep.frame_labels == ["Hero", "Pricing", "Dashboard"]
+
+
 def test_wcag_finding_requires_numeric_criterion():
     f = WCAGFinding(
         title="t",

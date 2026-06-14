@@ -74,8 +74,16 @@ def _references_for_report(
                 resolved = _resolve_reference_path(ref.image_path)
             except Exception:
                 resolved = ref.image_path
-            label = f"{ref.id} · {ref.score:.2f}"
-            gallery_items.append((resolved, label))
+            # MULTI-FRAME ATTRIBUTION: when the run uploaded multiple
+            # frames, label the gallery item with which screens
+            # surfaced it so the team can see "Stripe pricing matched
+            # our Pricing AND Checkout — drift is broader than one
+            # page". For single-frame runs the field is empty and the
+            # label stays compact.
+            base_label = f"{ref.id} · {ref.score:.2f}"
+            if ref.matched_frames:
+                base_label += f" · matched {', '.join(ref.matched_frames)}"
+            gallery_items.append((resolved, base_label))
 
     market_lines: list[str] = []
     if report.market and report.market.competitors:

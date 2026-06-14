@@ -24,7 +24,6 @@ LAUNCH
 
 from __future__ import annotations
 
-import html
 import os
 import sys
 from pathlib import Path
@@ -41,6 +40,25 @@ from src.utils.logger import get_logger  # noqa: E402
 
 log = get_logger(__name__)
 
+from ui.strings import (  # noqa: E402
+    ANALYZE_HELP_HTML,
+    CONTEXT_FIELD_INFO,
+    CONTEXT_FIELD_PLACEHOLDER,
+    COST_TELEMETRY_HEADER_HTML,
+    EMPTY_LOG_BODY,
+    FRAME_LABELS_INFO,
+    HERO_BAND_HTML,
+    REFERENCES_INTRO_HTML,
+    REFERENCES_RUN_EMPTY_HTML,
+    REFERENCES_SEARCH_EMPTY_HTML,
+    REFERENCES_SEARCH_HEADER_HTML,
+    REFERENCES_SEARCH_INFO,
+    RUN_BUTTON_TIP_MARKDOWN,
+    SETTINGS_INTRO_HTML,
+    STEPS_EXPLAINER_HTML,
+    TOOL_REGISTRY_HEADER_HTML,
+    runtime_config_card_html,
+)
 from ui.handlers import on_run  # noqa: E402
 from ui.references import _reference_query_from_ui, _references_for_report  # noqa: E402
 from ui.render import render_report  # noqa: E402
@@ -69,117 +87,62 @@ def main() -> None:
         ) from e
 
     with gr.Blocks(title="Design Analysis Suite") as demo, gr.Column(elem_classes=["app-shell"]):
-        gr.HTML(
-            """
-<section class="hero-band">
-  <span class="eyebrow">Multimodal review</span>
-  <h1>Design Analysis Suite</h1>
-  <p>
-    Upload a screen for a fast visual, UX, accessibility, brand, and market review.
-    Five specialist agents critique in parallel and ship a single prioritized report.
-  </p>
-  <div class="chip-row">
-    <span class="chip">Visual</span>
-    <span class="chip">UX</span>
-    <span class="chip">Accessibility</span>
-    <span class="chip">Brand</span>
-    <span class="chip">Market</span>
-  </div>
-</section>
-"""
-        )
-
-        gr.HTML(
-            """
-<div class="steps">
-  <div class="step accent-teal"  data-step="1"><b>Upload</b><span>A clear PNG or JPG of the screen you want reviewed.</span></div>
-  <div class="step accent-coral" data-step="2"><b>Add context</b><span>Audience, brand voice, market &mdash; helps every agent.</span></div>
-  <div class="step accent-gold"  data-step="3"><b>Review</b><span>Score, prioritized fixes, and per-specialist evidence.</span></div>
-</div>
-"""
-        )
+        gr.HTML(HERO_BAND_HTML)
+        gr.HTML(STEPS_EXPLAINER_HTML)
 
         report_state = gr.State(value=None)
 
         with gr.Tabs():
             with gr.Tab("Analyze"):
-                with gr.Row():
-                    with gr.Column(scale=3, elem_classes=["upload-panel"]):
-                        gr.Markdown(
-                            """
-### Analyze a screen
-Upload a screenshot. Add context if useful.
-"""
-                        )
-                        image_in = gr.File(
-                            label="Design screenshot",
-                            file_types=["image"],
-                            type="filepath",
-                        )
-                        gr.Markdown(
-                            "_PNG / JPG / WebP up to 20 MB. Larger files are "
-                            "rejected with a clear message; oversized images "
-                            "are auto-resized to 1024 px on the long edge "
-                            "before any model call._",
-                            elem_classes=["upload-tip"],
-                        )
-                        instructions_in = gr.Textbox(
-                            label="Context",
-                            placeholder="Audience, brand, market, or goal",
-                            lines=3,
-                        )
-                        run_btn = gr.Button("Run analysis", variant="primary")
-                        gr.Markdown(
-                            "Mode is read from *.env* — "
-                            f"currently {'real APIs' if _default_real_mode() else 'offline fakes'}. "
-                            "Toggle *USE_REAL* in *.env* to switch."
-                        )
-                        gr.Examples(
-                            examples=[
-                                [
-                                    "src/fakes/fixtures/sample.png",
-                                    "audience: Indian retail banking users; brand: trustworthy, modern, accessible",
-                                ]
-                            ],
-                            inputs=[image_in, instructions_in],
-                            label="Try the bundled sample",
-                        )
-
-                    with gr.Column(scale=2):
-                        gr.HTML(
-                            """
-<div class="guide-card accent-teal">
-  <h3>Good inputs</h3>
-  <ul>
-    <li>Readable UI screenshots</li>
-    <li>Dashboards, onboarding, checkout</li>
-    <li>Full screens work best</li>
-  </ul>
-</div>
-<br>
-<div class="guide-card accent-coral">
-  <h3>Output</h3>
-  <ul>
-    <li>Score and key strengths</li>
-    <li>Prioritized fixes</li>
-    <li>Evidence and references</li>
-  </ul>
-</div>
-"""
-                        )
-
-                log_out = gr.HTML(
-                    _status_message(
-                        "Ready",
-                        "Upload a screenshot. The mode (real APIs vs fakes) is read from .env.",
+                gr.HTML(ANALYZE_HELP_HTML)
+                with gr.Column(elem_classes=["upload-panel"]):
+                    image_in = gr.File(
+                        label="Design screenshots (up to 5 of the same product)",
+                        file_types=["image"],
+                        type="filepath",
+                        file_count="multiple",
                     )
-                )
+                    frame_labels_in = gr.Textbox(
+                        label="Frame labels",
+                        placeholder="Hero\nPricing\nDashboard",
+                        lines=3,
+                        info=FRAME_LABELS_INFO,
+                    )
+                    instructions_in = gr.Textbox(
+                        label="Context",
+                        placeholder=CONTEXT_FIELD_PLACEHOLDER,
+                        lines=3,
+                        info=CONTEXT_FIELD_INFO,
+                    )
+                    run_btn = gr.Button("Run analysis", variant="primary")
+                    gr.Markdown(
+                        RUN_BUTTON_TIP_MARKDOWN,
+                        elem_classes=["upload-tip"],
+                    )
+                    gr.Markdown(
+                        "Mode is read from *.env* — "
+                        f"currently {'real APIs' if _default_real_mode() else 'offline fakes'}. "
+                        "Toggle *USE_REAL* in *.env* to switch."
+                    )
+                    gr.Examples(
+                        examples=[
+                            [
+                                ["src/fakes/fixtures/sample.png"],
+                                "Sample dashboard",
+                                "audience: Indian retail banking users; brand: trustworthy, modern, accessible",
+                            ]
+                        ],
+                        inputs=[image_in, frame_labels_in, instructions_in],
+                        label="Try the bundled sample",
+                    )
+
+                log_out = gr.HTML(_status_message("Ready", EMPTY_LOG_BODY))
                 with gr.Accordion("Raw structured report", open=False):
                     json_out = gr.JSON(label="DesignReport JSON", elem_classes=["json-holder"])
 
                 run_btn.click(
                     fn=on_run,
-                    inputs=[image_in, instructions_in],
+                    inputs=[image_in, instructions_in, frame_labels_in],
                     outputs=[log_out, json_out, report_state],
                 )
 
@@ -188,46 +151,22 @@ Upload a screenshot. Add context if useful.
                 report_state.change(fn=render_report, inputs=[report_state], outputs=[report_view])
 
             with gr.Tab("References"):
-                gr.HTML(
-                    """
-<div class="guide-card accent-teal">
-  <h3>References</h3>
-  <p>The top section shows references the agents <b>actually used</b> in
-  the latest analysis (brand RAG + market citations). Use search below to
-  add supplementary references from the local index and the live web.</p>
-</div>
-"""
-                )
-
+                gr.HTML(REFERENCES_INTRO_HTML)
                 run_refs_gallery = gr.Gallery(
                     columns=4,
                     height=320,
                     label="Brand references retrieved by THIS run",
                     elem_classes=["reference-gallery"],
                 )
-                run_refs_notes = gr.HTML(
-                    """
-<div class="reference-card">
-  <h3>References used in this run</h3>
-  <p>Run an analysis from the <b>Analyze</b> tab. The references the
-  brand and market agents consulted will appear here automatically.</p>
-</div>
-"""
-                )
+                run_refs_notes = gr.HTML(REFERENCES_RUN_EMPTY_HTML)
 
-                gr.HTML(
-                    """
-<div class="guide-card accent-coral" style="margin-top:18px">
-  <h3>Search for more references</h3>
-  <p>Optional supplementary search across the local index and live web.</p>
-</div>
-"""
-                )
+                gr.HTML(REFERENCES_SEARCH_HEADER_HTML)
                 with gr.Row(elem_classes=["reference-panel"]):
                     q = gr.Textbox(
                         label="Search",
                         placeholder="fintech dashboard, onboarding, checkout",
                         scale=4,
+                        info=REFERENCES_SEARCH_INFO,
                     )
                     ref_btn = gr.Button("Search", variant="primary", scale=1)
                 gallery = gr.Gallery(
@@ -236,14 +175,7 @@ Upload a screenshot. Add context if useful.
                     label="Search results",
                     elem_classes=["reference-gallery"],
                 )
-                reference_notes = gr.HTML(
-                    """
-<div class="reference-card">
-  <h3>Search results</h3>
-  <p>Type a pattern or product category and press Search.</p>
-</div>
-"""
-                )
+                reference_notes = gr.HTML(REFERENCES_SEARCH_EMPTY_HTML)
                 q.submit(
                     fn=_reference_query_from_ui,
                     inputs=[q],
@@ -255,9 +187,6 @@ Upload a screenshot. Add context if useful.
                     outputs=[gallery, reference_notes],
                 )
 
-                # Auto-populate the run-references section whenever a new
-                # report lands in `report_state`. This is the contextual
-                # link that ties the References tab to the current run.
                 report_state.change(
                     fn=_references_for_report,
                     inputs=[report_state],
@@ -265,35 +194,23 @@ Upload a screenshot. Add context if useful.
                 )
 
             with gr.Tab("Settings"):
+                gr.HTML(SETTINGS_INTRO_HTML)
                 gr.HTML(
-                    f"""
-<div class="settings-card">
-  <h3>Runtime settings</h3>
-  <p><b>Real API key loaded</b>: {_has_openrouter_key()}</p>
-  <p><b>USE_REAL in .env</b>: {cfg.use_real}</p>
-  <p><b>Default text model</b>: <code>{html.escape(cfg.default_text_model)}</code></p>
-  <p><b>Default vision model</b>: <code>{html.escape(cfg.default_vision_model)}</code></p>
-  <p><b>Default temperature</b>: {cfg.default_temperature}</p>
-  <p><b>Max tokens (per call)</b>: {cfg.default_max_tokens:,}</p>
-  <p><b>Cache</b>: {"DISABLED" if cfg.cache_disabled else "enabled"}
-     ({_cache_file_count()} cached responses on disk)</p>
-  <p><b>Tavily key loaded</b>: {bool(cfg.tavily_api_key)}</p>
-  <p><b>Local reference images</b>: {_local_reference_file_count()}</p>
-  <p><b>Indexed reference rows</b>: {_vector_row_count()}</p>
-  <p><b>Reports</b>: <code>{cfg.report_dir}</code></p>
-</div>
-"""
+                    runtime_config_card_html(
+                        cfg,
+                        has_openrouter_key=_has_openrouter_key(),
+                        cache_file_count=_cache_file_count(),
+                        local_reference_file_count=_local_reference_file_count(),
+                        vector_row_count=_vector_row_count(),
+                    )
                 )
 
-                # Live cost telemetry — refreshes when the user clicks
-                # the button. We don't auto-poll because that itself
-                # would burn a tiny bit of CPU; one explicit click is
-                # enough for a hackathon demo.
+                gr.HTML(COST_TELEMETRY_HEADER_HTML)
                 cost_view = gr.HTML(_cost_telemetry_html())
                 refresh_btn = gr.Button("Refresh telemetry", variant="secondary")
                 refresh_btn.click(fn=_cost_telemetry_html, outputs=[cost_view])
 
-                # Tool registry — auditable list of all per-agent tools.
+                gr.HTML(TOOL_REGISTRY_HEADER_HTML)
                 gr.HTML(_tool_registry_html())
 
     demo.queue().launch(

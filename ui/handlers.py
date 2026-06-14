@@ -35,6 +35,7 @@ log = get_logger(__name__)
 def on_run(
     image: Any,
     instructions: str,
+    frame_labels_text: str = "",
 ) -> Generator[tuple[str, dict[str, Any], dict[str, Any] | None], None, None]:
     """Streaming run handler for Tab 1.
 
@@ -42,46 +43,64 @@ def on_run(
     specifically ``USE_REAL`` and the presence of ``OPENROUTER_API_KEY``.
     There is no UI override; the Settings tab shows what's loaded.
 
+    MULTI-IMAGE
+    -----------
+    ``image`` is whatever ``gr.File(file_count="multiple")`` hands us —
+    a single path, a list of paths, or a list of file-like objects.
+    The handler normalizes that into a list of paths and runs the entire
+    batch through ``preflight_batch`` before any tokens are spent. Every
+    vision agent then sees all N frames in one call so the resulting
+    report compares them as a single coherent product.
+
+    ``frame_labels_text`` is a newline-separated list of labels typed by
+    the user (one per frame, in upload order). Blank or shorter input
+    falls back to the filename stem so every frame always has a name
+    the synthesizer can cite by.
+
     GRACEFUL ERROR HANDLING
     -----------------------
     Every exception that escapes this function would land in Gradio's
     raw error dialog with a Python traceback. That is hostile to users
     and leaks stack-frame paths from the server. We instead:
 
-      1. Validate the upload via ``preflight_image`` -> ``UploadError``
+      1. Validate the upload(s) via ``preflight_batch`` -> ``UploadError``
          with a user-friendly title + body.
       2. Wrap the rest of the run in a broad ``except Exception``,
          log the full traceback server-side, and yield a clean banner.
     """
-    if image is None:
+    raw_paths = _normalize_uploads(image)
+    if not raw_paths:
         yield (
             _status_message(
                 "Upload needed",
-                "Add a PNG or JPG screenshot first.",
+                "Add at least one PNG or JPG screenshot first.",
             ),
             {},
             None,
         )
         return
 
-    raw_path = Path(image.name if hasattr(image, "name") else image)
-
-    # SAFETY GATE: validate the upload BEFORE we spend tokens or boot
-    # the agent graph. preflight_image converts every failure into a
-    # UploadError carrying user-readable copy.
+    # SAFETY GATE: validate the BATCH (size + per-file shape) BEFORE we
+    # spend tokens or boot the agent graph. preflight_batch converts
+    # every failure into an UploadError carrying user-readable copy.
     try:
         from src.utils.safe_image import (
             UploadError,
             downsize_for_pipeline,
-            preflight_image,
+            preflight_batch,
         )
 
-        preflight_image(raw_path)
-        # Pre-resize before the pipeline ever sees the file. The original
-        # is left intact; the pipeline reads the downsized copy.
-        image_path = downsize_for_pipeline(raw_path)
+        preflight_batch(raw_paths)
+        # Pre-resize each frame before the pipeline ever sees it. The
+        # originals are left intact; the pipeline reads the downsized
+        # copies. Multi-frame runs amortize this once per upload.
+        image_paths = [downsize_for_pipeline(p) for p in raw_paths]
     except UploadError as e:
-        log.warning("on_run: rejected upload %s — %s", raw_path.name, e.debug_detail)
+        log.warning(
+            "on_run: rejected upload(s) %s — %s",
+            [p.name for p in raw_paths],
+            e.debug_detail,
+        )
         yield (_status_message(e.user_title, e.user_body), {}, None)
         return
 
@@ -111,22 +130,32 @@ def on_run(
 
         get_cost_tracker().reset()
 
+        n = len(image_paths)
+        labels = _resolve_frame_labels(frame_labels_text, image_paths)
+        if n == 1:
+            running_detail = f"Reviewing {labels[0]} with {mode_label}."
+        else:
+            running_detail = (
+                f"Reviewing {n} frames as one product with {mode_label}: "
+                f"{', '.join(labels)}."
+            )
         yield (
-            _status_message(
-                "Analysis running",
-                f"Reviewing {image_path.name} with {mode_label}.",
-            ),
+            _status_message("Analysis running", running_detail),
             {},
             None,
         )
         report: DesignReport = run_graph(
-            image_path, instructions=instructions or None, deps=deps
+            image_paths,
+            instructions=instructions or None,
+            frame_labels=labels,
+            deps=deps,
         )
         report_dict = report.model_dump()
 
         cost = get_cost_tracker().snapshot()
+        frames_label = "frame" if n == 1 else "frames"
         detail = (
-            f"Score: {report.overall_score:.1f}/100. "
+            f"Score: {report.overall_score:.1f}/100 across {n} {frames_label}. "
             f"Tokens used: {cost['total_tokens']:,} "
             f"(~${cost['estimated_usd']:.4f}); cache hits: {cost['cache_hits']}. "
             "Open Report."
@@ -140,6 +169,55 @@ def on_run(
         log.exception("on_run: unexpected failure during analysis")
         title, body = _classify_run_error(e)
         yield (_status_message(title, body), {}, None)
+
+
+def _resolve_frame_labels(text: str, image_paths: list[Path]) -> list[str]:
+    """Parse the free-form labels textbox into one label per frame.
+
+    The user types one label per line in the UI (in upload order). We:
+      - Split on newlines, trim whitespace, drop blanks.
+      - Pad with the filename stem of each remaining frame so the result
+        is ALWAYS the same length as image_paths.
+      - Truncate any extras (a label without a frame is silently ignored).
+
+    Single-frame runs return ``[label]`` so the running-status text
+    always has something nicer than the temp filename to display.
+    """
+    typed = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    out: list[str] = []
+    for i, p in enumerate(image_paths):
+        if i < len(typed):
+            out.append(typed[i])
+        else:
+            out.append(p.stem or f"Frame {i + 1}")
+    return out
+
+
+def _normalize_uploads(image: Any) -> list[Path]:
+    """Coerce the gr.File payload into a list of Paths.
+
+    With ``file_count="multiple"`` Gradio hands us a list of strings (when
+    type="filepath"); legacy single-file calls hand us a single string or
+    a single file-like object. We accept all three shapes so the rest of
+    the handler never branches on payload type. Drops empties / None
+    entries silently.
+    """
+    if image is None:
+        return []
+    if isinstance(image, (str, Path)):
+        return [Path(image)]
+    items = list(image) if isinstance(image, (list, tuple)) else [image]
+    out: list[Path] = []
+    for it in items:
+        if it is None:
+            continue
+        if isinstance(it, (str, Path)):
+            out.append(Path(it))
+        else:
+            name = getattr(it, "name", None)
+            if name:
+                out.append(Path(name))
+    return out
 
 
 def _classify_run_error(e: Exception) -> tuple[str, str]:

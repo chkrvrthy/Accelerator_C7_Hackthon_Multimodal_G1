@@ -38,16 +38,29 @@ DO NOT
 ------
 - Do not concatenate ``system`` into ``user``. It works, but pollutes
   LangSmith traces and breaks the cache key.
-- Do not pass > 2 images directly. Use ``side_by_side`` to make ONE.
 - Do not skip the resize. Costs 3x for nothing.
 - Do not set ``response_format`` to a Pydantic class — pass the schema dict.
+
+MULTI-IMAGE SUPPORT
+-------------------
+This client accepts 1..N images per call. The product caps the user at
+5 frames per run (see ``src/utils/safe_image.MAX_IMAGES_PER_RUN``);
+that cap is enforced upstream in the UI handler, not here. Internally,
+each image is resized to 1024 px max side and encoded as a separate
+``image_url`` content part — both OpenAI and Anthropic vision endpoints
+accept multiple parts in a single user message. The brand agent uses
+``side_by_side`` (see ``tools.image_utils``) when it wants the user
+frame plus reference candidates packed into ONE composite to keep the
+single-message budget tight.
 
 COST DISCIPLINE
 ---------------
 A 4K screenshot is ~2400 tokens. Resized to 1024 px max side, it is ~700.
-Always resize. The ``side_by_side`` helper in ``tools.image_utils`` lets
-you pack four references into one image — one upload, one charge, four
-comparisons.
+Always resize. For multi-frame runs the per-call cost scales linearly
+with N (one image charge per frame); the synthesizer cost is constant
+because it never sees images. The ``side_by_side`` helper in
+``tools.image_utils`` lets you pack four references into one image —
+one upload, one charge, four comparisons.
 """
 
 from __future__ import annotations

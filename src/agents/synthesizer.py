@@ -101,6 +101,49 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
             f"{json.dumps(state.analysis_status, separators=(',', ':'))}"
             "</analysis_status>"
         )
+    # MULTI-FRAME AWARENESS: the synthesizer is text-only — it never
+    # sees the screenshots — but it still needs to know how many frames
+    # were reviewed AND under what labels so the executive summary
+    # ("Pricing is the weak link") and recommendation attribution
+    # ("affected_frames: ['Pricing', 'Checkout']") are grounded. The
+    # vision specialists already analysed all frames as ONE coherent
+    # product (see multi_image_note); this block teaches the synthesizer
+    # which labels to cite, how to correlate, and how to populate
+    # per_frame_scores.
+    n_frames = len(state.image_paths)
+    frame_context = ""
+    if n_frames > 1:
+        labels = state.frame_labels or [f"Frame {i + 1}" for i in range(n_frames)]
+        labels_block = "\n".join(f"  {i + 1}. {label}" for i, label in enumerate(labels))
+        labels_csv = json.dumps(labels)
+        frame_context = (
+            f"\n<frame_count>{n_frames}</frame_count>\n"
+            f"<frame_labels>{labels_csv}</frame_labels>\n"
+            "<multi_frame_synthesis>\n"
+            f"This review covers {n_frames} frames of the same product, "
+            f"labelled (in upload order):\n{labels_block}\n"
+            "Cite findings by label, never by index. The valid set for "
+            "Recommendation.affected_frames is EXACTLY the labels above; "
+            "any other string is a contract violation.\n\n"
+            "The specialist agents analysed all frames as ONE coherent "
+            "product. Your executive_summary, score_rationale, and "
+            "recommendations should:\n"
+            f" - refer to 'the {n_frames} screens we reviewed' or 'the "
+            "design system across these screens' rather than 'this "
+            "screen';\n"
+            " - cite per-frame findings BY LABEL ('Pricing: secondary "
+            "CTA contrast 2.8:1');\n"
+            " - drop labels for global findings (palette drift across "
+            "all screens, typography rhythm, brand voice);\n"
+            " - merge an issue that appears on 2+ frames into ONE "
+            "recommendation; list every affected label in "
+            "affected_frames; never produce one recommendation per "
+            "frame for the same issue;\n"
+            " - emit per_frame_scores keyed by these EXACT labels — at "
+            "minimum each frame gets an 'overall' score; per-axis "
+            "sub-scores when you have signal.\n"
+            "</multi_frame_synthesis>"
+        )
     if failed:
         log.warning(
             "synthesizer: %d/%d specialists missing (%s) — emitting degraded report.",
@@ -116,7 +159,8 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
     user_text = (
         "Synthesize a DesignReport from these specialist outputs.\n"
         f"<inputs>{json.dumps(parts, separators=(',', ':'))}</inputs>"
-        f"{status_block}\n"
+        f"{status_block}"
+        f"{frame_context}\n"
         "<task>\n"
         " 1. executive_summary (60-100 word narrative paragraph): headline"
         " finding, single biggest opportunity, action to ship first.\n"
@@ -202,6 +246,34 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
     report.accessibility = state.accessibility
     report.brand = state.brand
     report.market = state.market
+
+    # MULTI-FRAME OWNERSHIP: frame_labels is a fact about the run (what
+    # the user uploaded under which name) — the LLM does not get to
+    # invent it. We stamp the canonical list from state, then scrub any
+    # affected_frames / per_frame_scores entries that point at labels
+    # the user never actually uploaded. This is the structural safety
+    # net for the prompt-side rule "never invent labels".
+    if n_frames > 1:
+        report.frame_labels = list(state.frame_labels)
+        valid_labels = set(report.frame_labels)
+        # Scrub Recommendation.affected_frames against the canonical set.
+        for rec in report.top_recommendations:
+            if rec.affected_frames:
+                rec.affected_frames = [
+                    label for label in rec.affected_frames if label in valid_labels
+                ]
+        # Scrub per_frame_scores keys against the canonical set.
+        if report.per_frame_scores:
+            report.per_frame_scores = {
+                k: v for k, v in report.per_frame_scores.items() if k in valid_labels
+            }
+    else:
+        # Single-frame run — guarantee these stay empty so the UI's
+        # "is this multi-frame?" check is purely "len(frame_labels) > 1".
+        report.frame_labels = []
+        report.per_frame_scores = {}
+        for rec in report.top_recommendations:
+            rec.affected_frames = []
 
     # LOGIC: defense in depth — the validator renumbers priorities densely
     # but if the LLM emitted no priority at all, fix it now.

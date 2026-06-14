@@ -44,6 +44,24 @@ class Retriever(Protocol):
     def retrieve_by_text(self, text, k=5) -> list[RetrievedRef]: ...
 ```
 
+`RetrievedRef` now carries `matched_frames: list[str]` — leave it empty
+in your retriever; the **brand agent** populates it in
+`_retrieve_for_all_frames` after merging per-frame results. Your job is
+unchanged: one image in, top-k closest refs out.
+
+### Multi-frame note (no contract change)
+
+For comparison-mode runs the brand agent calls `retrieve_by_image` once
+per uploaded frame and merges results client-side. CLIP encoding is the
+expensive step — your retriever should:
+
+1. **Cache the image embedding** keyed by file-bytes hash so the same
+   frame on a re-run is sub-millisecond.
+2. **Accept a `Path` or a `str`** — the brand agent passes whatever's
+   in `state.image_paths`.
+3. **Never raise on a missing file** — log + return `[]` so a bad frame
+   does not kill the whole batch.
+
 ## Setup — first 5 minutes (do exactly this)
 
 ### 1. Clone and create a venv

@@ -170,6 +170,59 @@ def check_design_report(report: DesignReport) -> list[QualityIssue]:
             )
         )
 
+    # MULTI-FRAME RUNS: the synthesizer is required to emit
+    # per_frame_scores for runs that cover 2+ frames. An empty dict here
+    # means the user lost the per-frame heatmap — the primary visual
+    # the multi-frame story sells. We flag it as 'warn' (not 'fail') so
+    # the report still renders; the retry loop picks it up if enabled.
+    n_frames = len(report.frame_labels)
+    if n_frames > 1:
+        if not report.per_frame_scores:
+            issues.append(
+                QualityIssue(
+                    field="per_frame_scores",
+                    reason=(
+                        f"Multi-frame run ({n_frames} frames) emitted no "
+                        "per_frame_scores; the per-frame heatmap will be "
+                        "blank. Re-prompt the synthesizer with the "
+                        "per_frame_scores contract."
+                    ),
+                    severity="warn",
+                )
+            )
+        else:
+            missing = sorted(set(report.frame_labels) - set(report.per_frame_scores.keys()))
+            if missing:
+                issues.append(
+                    QualityIssue(
+                        field="per_frame_scores",
+                        reason=(
+                            "per_frame_scores is missing entries for "
+                            f"{', '.join(missing)}. Every uploaded frame "
+                            "must have at least an 'overall' score."
+                        ),
+                        severity="warn",
+                    )
+                )
+        # affected_frames on every recommendation should ideally cite
+        # at least one frame label; warn (not fail) when none do.
+        no_attribution = sum(1 for r in report.top_recommendations if not r.affected_frames)
+        if (
+            report.top_recommendations
+            and no_attribution == len(report.top_recommendations)
+        ):
+            issues.append(
+                QualityIssue(
+                    field="top_recommendations[*].affected_frames",
+                    reason=(
+                        "Multi-frame run produced recommendations but none "
+                        "cite which frame they affect. Re-prompt to "
+                        "populate affected_frames for each recommendation."
+                    ),
+                    severity="warn",
+                )
+            )
+
     return issues
 
 

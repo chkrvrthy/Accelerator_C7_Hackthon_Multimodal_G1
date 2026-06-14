@@ -69,9 +69,66 @@ from src.schemas.outputs import (
     RetrievedRef,
 )
 from src.utils.logger import get_logger
-from src.utils.prompts import brand_consistency_system, brand_consistency_user
+from src.utils.prompts import (
+    brand_consistency_system,
+    brand_consistency_user,
+    multi_image_note,
+)
 
 log = get_logger(__name__)
+
+
+def _retrieve_for_all_frames(state: GraphState, deps: AgentDeps) -> list[RetrievedRef]:
+    """Retrieve top-k for each frame, dedupe by id (keeping max score), top-5 global.
+
+    Single-frame runs (the historical case) reduce to one retrieve_by_image
+    call — same behaviour as before. Multi-frame runs amortize one
+    retrieve per frame and merge; the cost is dominated by CLIP encoding
+    which is already cached per image inside the embedder.
+
+    Per-frame attribution: every kept ref records the set of
+    ``frame_labels`` whose query surfaced it in the top-k. Used by the
+    brand prompt to phrase drift findings against specific screens
+    ("Pricing matched stripe-pricing-2024 at 0.83; Hero did not").
+    """
+    by_id: dict[str, RetrievedRef] = {}
+    n_frames = len(state.image_paths)
+    for i, path in enumerate(state.image_paths):
+        # Use the canonical label when present; the GraphState validator
+        # has already padded short label lists with filename stems so
+        # ``state.frame_labels[i]`` always exists by this point.
+        frame_label = (
+            state.frame_labels[i] if i < len(state.frame_labels) else f"Frame {i + 1}"
+        )
+        try:
+            hits = deps.retriever.retrieve_by_image(Path(path), k=5)
+        except Exception as e:
+            # LOGIC: a single bad frame (missing file, encoder hiccup) must
+            # not kill the whole retrieval pass — log and skip so the LLM
+            # still gets refs from the remaining frames.
+            log.warning(
+                "brand: retrieve_by_image failed for %s (%s); skipping that frame",
+                path,
+                type(e).__name__,
+            )
+            continue
+        for ref in hits:
+            existing = by_id.get(ref.id)
+            if existing is None:
+                # New ref — clone with this frame attributed (only when
+                # the run is multi-frame; for N=1 we keep matched_frames
+                # empty so the legacy single-frame contract is unchanged).
+                ref_copy = ref.model_copy(deep=True)
+                ref_copy.matched_frames = [frame_label] if n_frames > 1 else []
+                by_id[ref.id] = ref_copy
+            else:
+                # Same ref surfaced by another frame — extend attribution
+                # and keep the BEST score across frames.
+                if n_frames > 1 and frame_label not in existing.matched_frames:
+                    existing.matched_frames.append(frame_label)
+                if ref.score > existing.score:
+                    existing.score = ref.score
+    return sorted(by_id.values(), key=lambda r: r.score, reverse=True)[:5]
 
 
 def _build_images(state: GraphState, refs: list[RetrievedRef], deps: AgentDeps) -> list[Path]:
@@ -83,11 +140,13 @@ def _build_images(state: GraphState, refs: list[RetrievedRef], deps: AgentDeps) 
     implemented (Person B's slice) or compositing fails for any reason, so
     Person C's agent works regardless of the other slice's progress.
     """
-    # Only include reference files that actually exist on disk. Paths come from
-    # the corpus and may be stale (image deleted/moved since ingest); a missing
-    # file would otherwise crash the vision encoder mid-run.
+    # Include every uploaded candidate frame plus every reference file
+    # that actually exists on disk. Refs that point at stale paths (image
+    # deleted/moved since ingest) are dropped silently so the vision
+    # encoder never crashes mid-run on a missing file.
+    candidate_paths = [Path(p) for p in state.image_paths]
     ref_paths = [Path(r.image_path) for r in refs if Path(r.image_path).exists()]
-    separate = [Path(state.image_path), *ref_paths]
+    separate = [*candidate_paths, *ref_paths]
     try:
         from src.tools.image_utils import load_image, side_by_side
 
@@ -103,8 +162,18 @@ def _build_images(state: GraphState, refs: list[RetrievedRef], deps: AgentDeps) 
 
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, BrandConsistency | list[RetrievedRef]]:
-    """Run the Brand Consistency agent."""
-    refs = deps.retriever.retrieve_by_image(Path(state.image_path), k=5)
+    """Run the Brand Consistency agent.
+
+    MULTI-FRAME RETRIEVAL
+    ---------------------
+    For comparison-mode runs (N>1), we retrieve top-k references from
+    EVERY frame and dedupe by ref id, keeping the highest score per id.
+    A site's hero, dashboard, and pricing pages embed to different
+    regions of CLIP space, so retrieving from only the primary frame
+    would miss refs that match the others. We then take the global
+    top-5 by score, regardless of which frame surfaced them.
+    """
+    refs = _retrieve_for_all_frames(state, deps)
 
     if not refs:
         # LOGIC: graceful empty-corpus fallback. The synthesizer still gets a
@@ -123,10 +192,13 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, BrandConsistency | list
     # back to separate uploads (see _build_images). The user message lists the
     # retrieved ref ids + scores so the LLM can only cite ids that exist.
     images = _build_images(state, refs, deps)
+    user_text = brand_consistency_user(refs) + multi_image_note(
+        len(state.image_paths), state.frame_labels
+    )
     result = run_with_schema(
         agent_name="agent.brand",
         system=brand_consistency_system(),
-        user=brand_consistency_user(refs),
+        user=user_text,
         images=images,
         schema=BrandConsistency,
         deps=deps,

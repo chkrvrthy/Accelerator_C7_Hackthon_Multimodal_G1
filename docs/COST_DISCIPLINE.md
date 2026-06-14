@@ -119,7 +119,23 @@ Single screenshot, no cache hits, default models (`gpt-4o-mini`):
 
 **~⅓ of a cent per analysis at default settings.** With a 50% cache hit rate (a typical demo with one or two images you analyze repeatedly), it's closer to **$0.002**.
 
-For comparison, switching the defaults to Claude 3.5 Sonnet ($3 / $15 per Mtok) would push a single run past **$0.06** — a 17× swing. The defaults exist on purpose.
+### Multi-frame: how cost scales with frame count
+
+Comparison-mode runs (2-5 frames) charge each frame as one image part to the four vision agents. Synthesizer cost is constant because it never sees images.
+
+| Frames per run | 4 vision calls (image tok) | Other prompt+output tok | Total |
+| --- | --- | --- | --- |
+| 1 | 4 × 700 = 2,800 | ~7,400 | **~$0.0035** |
+| 3 | 4 × 2,100 = 8,400 | ~7,400 | **~$0.010** |
+| 5 (max) | 4 × 3,500 = 14,000 | ~7,400 | **~$0.018** |
+
+Why the 5-frame ceiling matters for cost:
+
+1. The hard cap (`MAX_IMAGES_PER_RUN = 5` in `src/utils/safe_image.py`) is enforced before any tokens are spent — the user gets a friendly "Too many screenshots" banner instead of a surprise bill.
+2. `_retrieve_for_all_frames` in `src/agents/brand_consistency.py` queries CLIP once per frame, but CLIP is **local** (no API call); the Brand agent still issues a single LLM call regardless of frame count.
+3. The cache key is `sha256(every image's bytes + prompts)`, so a 5-frame run that only differs from a previous run by ONE swapped frame is a full miss — the cache cannot rescue partial overlaps. Be deliberate about which frames you upload.
+
+For comparison, switching the defaults to Claude 3.5 Sonnet ($3 / $15 per Mtok) would push a single-frame run past **$0.06** and a 5-frame run past **$0.30** — a 17× swing. The defaults exist on purpose.
 
 ## 5. Observability
 

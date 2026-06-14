@@ -30,6 +30,7 @@ during a normal demo run. Treat it as the highest-value path.
 
 ```python
 class VisionLLM(Protocol):
+    # ``images`` accepts 1..5 paths — pass state.image_paths whole.
     def analyze(self, *, system, user, images, schema, model=None) -> BaseModel: ...
 
 class Retriever(Protocol):     # used by brand_consistency only
@@ -38,6 +39,23 @@ class Retriever(Protocol):     # used by brand_consistency only
 
 You receive these wrapped in an `AgentDeps` (see `src/agents/base.py`). Never
 import a concrete class.
+
+### Multi-frame contract (already wired — what to remember when iterating)
+
+- **Visual agent**: pass every uploaded frame in one call —
+  `images=[Path(p) for p in state.image_paths]`. Append
+  `multi_image_note(len(state.image_paths), state.frame_labels)` to the
+  user message so the LLM cites findings by frame label, not by index.
+- **Brand agent**: `_retrieve_for_all_frames` runs CLIP retrieval once
+  per frame, dedupes by ref id (highest score wins), and stamps
+  `matched_frames` on each kept ref. The user prompt's
+  `<retrieved_refs>` block exposes `matched_frames` so the LLM can
+  attribute drift findings to specific screens.
+- **Recommendation contract**: every recommendation the synthesizer
+  generates from your output should populate `affected_frames` on
+  multi-frame runs. You do not write these directly — your job is to
+  emit findings with frame-attributed evidence in the description so
+  the synthesizer has signal to fill the field.
 
 ## Setup — first 5 minutes (do exactly this)
 

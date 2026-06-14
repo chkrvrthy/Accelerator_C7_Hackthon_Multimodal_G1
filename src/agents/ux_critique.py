@@ -65,18 +65,21 @@ from pathlib import Path
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
 from src.schemas.outputs import GraphState, UXCritique
 from src.utils.logger import get_logger
-from src.utils.prompts import ux_critique_system, ux_critique_user
+from src.utils.prompts import multi_image_note, ux_critique_system, ux_critique_user
 
 log = get_logger(__name__)
 
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, UXCritique]:
     """Run the UX Critique agent."""
+    user_text = ux_critique_user(state) + multi_image_note(
+        len(state.image_paths), state.frame_labels
+    )
     result = run_with_schema(
         agent_name="agent.ux",
         system=ux_critique_system(),
-        user=ux_critique_user(state),
-        images=[Path(state.image_path)],
+        user=user_text,
+        images=[Path(p) for p in state.image_paths],
         schema=UXCritique,
         deps=deps,
     )
