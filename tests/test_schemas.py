@@ -88,16 +88,63 @@ def test_wcag_finding_requires_numeric_criterion():
     assert f.criterion == "1.4.3"
 
 
-def test_wcag_finding_rejects_bad_criterion():
-    with pytest.raises(ValidationError):
-        WCAGFinding(
-            title="t",
-            description="d",
-            severity=Severity.HIGH,
-            evidence="e",
-            recommendation="r",
-            criterion="contrast",
-        )
+def test_wcag_finding_drops_bad_criterion():
+    # Resilience contract: a malformed criterion is silently coerced to
+    # "" so a single LLM quirk never crashes the run. Prompt remains the
+    # enforcement mechanism for citation quality.
+    f = WCAGFinding(
+        title="t",
+        description="d",
+        severity=Severity.HIGH,
+        evidence="e",
+        recommendation="r",
+        criterion="contrast",
+    )
+    assert f.criterion == ""
+
+
+def test_finding_backfills_missing_text_fields():
+    # Resilience contract: when the LLM omits description/evidence/
+    # recommendation we cross-fill from siblings so the UI always has copy.
+    f = Finding(title="Primary CTA buried", severity=Severity.HIGH)
+    assert f.description  # cross-filled, not blank
+    assert f.evidence
+    assert f.recommendation
+    # Title is the last-resort fallback; everything points at it here.
+    assert f.recommendation == "Primary CTA buried"
+
+
+def test_finding_severity_defaults_to_medium():
+    # Resilience contract: omitted severity is treated as MEDIUM rather
+    # than crashing validation.
+    f = Finding(title="t")
+    assert f.severity is Severity.MEDIUM
+
+
+def test_recommendation_minimal_construction():
+    # Resilience contract: only `title` is required; everything else has
+    # a sensible default so a thin LLM emission still produces a renderable
+    # recommendation.
+    r = Recommendation(title="Raise CTA contrast")
+    assert r.priority >= 1  # default 999, will be renumbered by report validator
+    assert r.effort == "M"
+    assert r.impact == "M"
+    assert r.rationale == "Raise CTA contrast"  # backfilled from title
+
+
+def test_design_report_renumbers_default_priorities_densely():
+    # When the LLM omits all priorities they collapse to 999. The report
+    # validator must renumber 1..N stably (preserving emit order) instead
+    # of deduping on priority and silently dropping all but one.
+    rep = DesignReport(
+        top_recommendations=[
+            Recommendation(title="A"),
+            Recommendation(title="B"),
+            Recommendation(title="C"),
+        ],
+    )
+    assert [r.priority for r in rep.top_recommendations] == [1, 2, 3]
+    assert [r.title for r in rep.top_recommendations] == ["A", "B", "C"]
 
 
 def test_retrieved_ref_score_is_float():

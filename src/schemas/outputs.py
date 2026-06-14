@@ -49,7 +49,7 @@ import re
 from enum import Enum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # A palette entry must be a hex color: "#RGB" or "#RRGGBB". Color names like
 # "navy" are dropped so downstream consumers (UI swatches) never choke.
@@ -84,31 +84,65 @@ class Finding(BaseModel):
     Used by the UX, accessibility and brand agents. Keeping all "bad thing
     spotted" outputs in a single shape lets the UI and synthesizer treat them
     uniformly (sort by severity, group by agent, etc).
+
+    RESILIENCE: only ``title`` is truly required. ``description``, ``evidence``
+    and ``recommendation`` default to "" and are cross-filled by
+    ``_backfill_text`` so a single omitted field from the LLM never crashes
+    the entire pipeline. ``severity`` defaults to ``MEDIUM``. The prompt is
+    still the enforcement mechanism for *quality*; this schema is the
+    enforcement mechanism for *shape*. We keep the contract surface stable
+    even when the model occasionally folds two fields into one.
     """
 
     title: str = Field(..., description="Short, action-oriented headline.")
-    description: str = Field(..., description="One paragraph, plain English.")
-    severity: Severity
-    evidence: str = Field(..., description="What the agent saw — quote the screen.")
-    recommendation: str = Field(..., description="A concrete, one-sentence fix.")
+    description: str = Field(default="", description="One paragraph, plain English.")
+    severity: Severity = Severity.MEDIUM
+    evidence: str = Field(
+        default="", description="What the agent saw — quote the screen."
+    )
+    recommendation: str = Field(
+        default="", description="A concrete, one-sentence fix."
+    )
+
+    @model_validator(mode="after")
+    def _backfill_text(self) -> "Finding":
+        # LOGIC: when the LLM omits one of the optional text fields we'd
+        # rather render a useful card than a blank one. Cross-fill from the
+        # most-related sibling. Order chosen so the user's reading flow
+        # (description -> evidence -> recommendation) makes sense even when
+        # everything collapses to a single sentence.
+        if not self.description.strip():
+            self.description = self.evidence or self.recommendation or self.title
+        if not self.evidence.strip():
+            self.evidence = self.description or self.title
+        if not self.recommendation.strip():
+            self.recommendation = self.title
+        return self
 
 
 # TODO(person-d): require a WCAG 2.2 success-criterion number on every
 #                 accessibility finding (e.g. 1.4.3). Implemented as WCAGFinding.
 class WCAGFinding(Finding):
-    """Accessibility finding with a required WCAG 2.2 success-criterion citation."""
+    """Accessibility finding with a best-effort WCAG 2.2 success-criterion citation.
+
+    RESILIENCE: ``criterion`` defaults to "" and any non-numeric value
+    ("contrast", "AA fail", "1.4") is silently coerced to "" so an LLM
+    quirk on one finding never breaks the run. Prompt remains the
+    enforcement mechanism — the UI badges blank citations as "uncited" so
+    reviewers still notice when the model skipped a citation.
+    """
 
     criterion: str = Field(
-        ...,
+        default="",
         description="WCAG 2.2 SC number, e.g. '1.4.3'.",
     )
 
     @field_validator("criterion")
     @classmethod
     def _criterion_format(cls, v: str) -> str:
-        v = v.strip()
-        if not re.match(r"^\d+\.\d+\.\d+$", v):
-            raise ValueError(f"WCAG criterion must look like '1.4.3', got {v!r}")
+        v = (v or "").strip()
+        if not v or not re.match(r"^\d+\.\d+\.\d+$", v):
+            return ""
         return v
 
 
@@ -218,17 +252,22 @@ class Recommendation(BaseModel):
     Why every field exists:
     - ``priority`` is the synthesizer's intent. Without it, render order
       betrays the user (the LLM emits in *reasoning* order, not *action*
-      order). Required, unique within a report.
+      order). Defaults to 999 when the LLM omits it; the report-level
+      validator renumbers densely 1..N.
     - ``metric_lift`` is what an executive reads first.
     - ``proof`` keeps the synthesizer honest — it must cite the specialist
       and the finding it derived from. Without proof we are guessing.
+
+    RESILIENCE: only ``title`` is truly required. Every other field has a
+    sensible default so an LLM that omits one piece of metadata never
+    breaks the whole report.
     """
 
-    priority: int = Field(..., ge=1, description="1 is highest. Unique within a report.")
+    priority: int = Field(default=999, ge=1, description="1 is highest. Renumbered densely 1..N.")
     title: str = Field(..., description="Imperative, target value when measurable.")
-    rationale: str = Field(..., description="One sentence with WHO flagged it AND WHY.")
-    effort: Literal["S", "M", "L"]
-    impact: Literal["S", "M", "L"]
+    rationale: str = Field(default="", description="One sentence with WHO flagged it AND WHY.")
+    effort: Literal["S", "M", "L"] = "M"
+    impact: Literal["S", "M", "L"] = "M"
     metric_lift: str | None = Field(
         default=None,
         description="Plain-English expected lift, e.g. '+8% sign-up conversion'.",
@@ -237,6 +276,14 @@ class Recommendation(BaseModel):
         default=None,
         description="Citation: '<agent>:<field>'. Example: 'accessibility:1.4.3'.",
     )
+
+    @model_validator(mode="after")
+    def _backfill_rationale(self) -> "Recommendation":
+        # LOGIC: a recommendation without a rationale is a slogan. Fall back
+        # to the title so the UI never renders a blank "why" column.
+        if not self.rationale.strip():
+            self.rationale = self.title
+        return self
 
 
 AgentStatus = Literal["ok", "partial", "failed", "skipped"]
@@ -302,24 +349,20 @@ class DesignReport(BaseModel):
     @field_validator("top_recommendations")
     @classmethod
     def _sort_and_validate_priorities(cls, v: list[Recommendation]) -> list[Recommendation]:
-        # LOGIC: sort by priority ascending so the UI can render in order
-        # without ever trusting the LLM's emit sequence. Drop items with
-        # duplicate priorities silently (renumber on the fly) — render-time
-        # defensive coding, not a hard fail, so a weak LLM output still
-        # produces a usable report.
+        # LOGIC: sort by the LLM-emitted priority asc (with stable order on
+        # ties), then renumber DENSELY 1..N. We deliberately do NOT dedupe
+        # by priority value — when the LLM omits priority entirely every
+        # recommendation defaults to 999, and dropping duplicates would
+        # silently kill all but one. Stable renumbering preserves the
+        # model's emit order as the tiebreaker, which is the closest proxy
+        # we have to "intended ranking" when explicit priorities are
+        # missing.
         if not v:
             return v
-        seen: set[int] = set()
-        unique: list[Recommendation] = []
-        for r in sorted(v, key=lambda x: x.priority):
-            if r.priority in seen:
-                continue
-            seen.add(r.priority)
-            unique.append(r)
-        # Renumber 1..N to keep the contract that priorities are dense and unique.
-        for i, r in enumerate(unique, start=1):
+        sorted_v = sorted(v, key=lambda x: x.priority)
+        for i, r in enumerate(sorted_v, start=1):
             r.priority = i
-        return unique
+        return sorted_v
 
     @field_validator("score_breakdown")
     @classmethod

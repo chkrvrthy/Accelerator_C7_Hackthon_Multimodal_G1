@@ -58,7 +58,11 @@ class Settings(BaseSettings):
     #     want 0.6+; override per-call via deps.llm.complete(..., temperature=...)
     #     instead of changing this default.
     default_temperature: float = Field(default=0.2)
-    default_max_tokens: int = Field(default=2048)
+    # LOGIC: 2048 was tight for the synthesizer when it has to emit a full
+    # nested DesignReport. 4096 gives every agent breathing room for a
+    # complete structured output even on a chatty model, while still capping
+    # cost predictably (~$0.01 per call on gpt-4o-mini at typical usage).
+    default_max_tokens: int = Field(default=4096)
 
     # -------- Web search ----------------------------------------------------
     tavily_api_key: str = Field(default="")
