@@ -62,103 +62,281 @@ make mcp
 # Leave this terminal visible on screen.
 ```
 
-### C. Tab 1 — Analyze (the live run)
+---
 
-1. **Image upload field** ("Design screenshot")
-   - Easiest: scroll to the **"Try the bundled sample"** row at the bottom of
-     the left panel and **click the row**. The file picker auto-fills with:
-     ```
-     src/fakes/fixtures/sample.png
-     ```
-   - Alternative if you want a more visually impressive screenshot: drag any
-     real PNG from your desktop into the upload area. Recommended size:
-     ≤ 2 MB and ≥ 800 × 600.
+### C. Capture the demo screenshot — exact website
 
-2. **Context** textbox
-   - Paste this exact line. It hits all five specialists with concrete words
-     they each respond to:
-     ```
-     Audience: Indian retail banking customers age 25-45.
-     Brand: trustworthy, modern, accessible, mobile-first.
-     Goal: increase first-time deposit conversion on the welcome screen.
-     Market: competing with PhonePe and Paytm onboarding flows.
-     ```
-   - Why this string: "Indian retail banking" gives the market agent a real
-     query to web-search, "trustworthy/modern/accessible" gives brand and
-     accessibility a target, "first-time deposit conversion" gives UX a
-     goal, "PhonePe and Paytm" gives a comparison set.
+We're analyzing a real, recognizable website. **Use Stripe's payments
+landing page** — it's the gold-standard fintech design, judges will know
+it on sight, and it gives every specialist agent rich signal:
 
-3. **Use real APIs from .env** checkbox
-   - Live demo, network uncertain → **uncheck it** (offline fakes, <1 s).
-   - Live demo, network solid + OpenRouter key set → **leave checked**
-     (real run, ~25 s, ~$0.03).
+- **Visual agent** — strong gradients, hierarchy, generous whitespace.
+- **UX agent** — clear primary CTA ("Start now"), short headline, social
+  proof block, code sample for a developer audience.
+- **Accessibility agent** — Stripe is WCAG 2.1 AA compliant, so the agent
+  will report mostly passes (good — the demo doesn't get bogged down in
+  red flags).
+- **Brand agent** — purple/indigo gradient is unmistakable Stripe brand.
+- **Market agent** — "Stripe payments" returns ~50 high-quality web hits.
 
-4. **Run analysis** button
-   - Click once. Do not click again — the streaming status will update twice
-     ("Analysis running" → "Report ready").
+#### C.1. Open the page
 
-### D. Tab 2 — Report (the money shot)
+```text
+URL:    https://stripe.com/payments
+Screen: 1440 × 900 (laptop default), zoom 100%, dark mode OFF, ad-blockers OFF
+Wait:   the hero gradient must be fully animated in (~2 s) before capture
+```
 
-When the status flips to "Report ready: Score: 76.4/100. Open Report.",
-click the **Report** tab. You should see, in order:
+#### C.2. Take a full-page PNG
 
-1. A 44 px score number with a green pill ("76.4 / 100 overall").
-2. **Top strengths** — three to five bullets.
-3. **Prioritized recommendations** — three cards, each with a gold
-   "Effort 2" pill and a teal "Impact 4" pill, then a one-sentence rationale.
-4. **Visual analysis**, **Accessibility**, **Market signals** sections.
+| Platform | One-line capture                                                                                                 |
+| -------- | ---------------------------------------------------------------------------------------------------------------- |
+| macOS    | Press `Cmd+Shift+4`, then `Spacebar`, then click the browser window. PNG saved to `~/Desktop/`.                  |
+| Linux    | Run `gnome-screenshot -w -d 2 -f ~/Desktop/stripe-payments.png` (waits 2 s, captures active window).             |
+| Windows  | Press `Win+Shift+S`, drag a rectangle around the browser viewport, paste into Paint, save as PNG to `Desktop\`.  |
+| Browser  | Chrome DevTools → `Cmd/Ctrl+Shift+P` → type `Capture full size screenshot` → Enter. PNG downloads automatically. |
 
-If the score is missing or the page says "No report yet", something failed —
-go to backup line A in the failure table.
+Rename the file to **`stripe-payments.png`** and move it somewhere
+predictable, e.g. `~/Desktop/stripe-payments.png`.
 
-### E. Tab 3 — References (proves RAG + web search are real)
+> **Why a real website and not the bundled `sample.png`?** The bundled
+> sample is 82 bytes — it's a shape placeholder, not a designed screen.
+> Judges want to see the agents critique a real page; a real page also
+> makes the Effort/Impact tags meaningful.
 
-1. Click the **References** tab.
-2. In the **Search** textbox, paste this exact string:
+#### C.3. (Fallback websites if Stripe is geo-blocked or the page changed)
+
+Pick one in this order. They are all live, recognizable, and give all five
+agents enough signal:
+
+1. `https://www.notion.so` — content-design polish, accessibility passes.
+2. `https://linear.app` — minimalist, dense product UI, dark gradients.
+3. `https://www.figma.com/pricing` — pricing-page archetype, table layout.
+4. `https://www.airbnb.com` — heavily researched UX, clear hierarchy.
+5. `https://razorpay.com` — Indian fintech, if you want a regional angle.
+
+---
+
+### D. Tab 1 — **Analyze** (where you start the run)
+
+The Analyze tab is the only tab that produces work. The other three tabs
+read state. Give it 90 seconds of attention.
+
+#### D.1. What's on the tab
+
+| Element               | What it does                                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Hero band             | Rubric-friendly title + the five capability chips (Visual / UX / Accessibility / Brand / Market). Read this aloud once.     |
+| Steps strip           | Visual reminder of the flow (Upload → Add context → Review). Don't click — it's narrative scaffolding.                      |
+| Design screenshot     | File upload. Accepts PNG/JPG/WEBP. Drag-and-drop or click-to-browse.                                                        |
+| Context               | Free-text notes: audience, brand, goal, market. **Every word here is fed to all five agents** — concrete words win.         |
+| Use real APIs         | Toggle. Checked → real OpenRouter calls (~25 s, ~$0.03). Unchecked → offline fakes (<1 s, $0).                              |
+| Run analysis (button) | Kicks off the LangGraph DAG. Streams status back into the page.                                                             |
+| Try the bundled sample| Auto-fills the form with `src/fakes/fixtures/sample.png`. Useful if real upload fails — do not use for the real demo.       |
+| Good inputs / Output  | Two info cards on the right. They are pure documentation; no interaction.                                                   |
+| Raw structured report | Collapsed accordion below the run button. Expand only if a judge asks "show me the raw JSON".                               |
+
+#### D.2. Exact values to fill
+
+1. **Design screenshot** — drag `~/Desktop/stripe-payments.png` from
+   step C into the upload area. Wait until the file name appears.
+2. **Context** — paste this exact text. It is engineered so each of the
+   five specialists has at least one concrete keyword to react to:
+
+   ```text
+   Audience: SaaS builders and small e-commerce founders evaluating payment APIs.
+   Brand: developer-credible, polished, modern, slightly playful, trustworthy.
+   Goal: convert a first-time visitor into a "Start now" or "Contact sales" click.
+   Constraint: WCAG 2.1 AA contrast, mobile-first, dark-mode friendly.
+   Market: competing with Adyen, Square, Razorpay, and PayPal Braintree.
    ```
-   fintech dashboard onboarding
-   ```
-3. Press Enter (or click **Search**).
-4. Two regions populate:
-   - **Image gallery** — thumbnails from your local LanceDB index (only
-     populated if you ran `make ingest` in step A). Each tile shows the
-     reference id and a similarity score.
-   - **Web references card** — five Tavily results with title + snippet +
-     external link, falling back to DuckDuckGo if `TAVILY_API_KEY` is unset.
 
-If the gallery is empty, narrate: *"Local index has zero rows because we
-haven't ingested any references on this demo machine — the search path
-itself works, web results are live."* Then move on.
+3. **Use real APIs from .env** — uncheck for offline fakes (safer); keep
+   checked only if you've smoke-tested OpenRouter in the last 30 min.
+4. Click **Run analysis** once.
 
-### F. Tab 4 — Settings (the deployability proof)
+#### D.3. What you should see
 
-1. Click the **Settings** tab.
-2. Read the four lines aloud as the camera lingers:
-   - **Real API key loaded**: True / False
-   - **Tavily key loaded**: True / False
-   - **Local reference images**: <integer>
-   - **Indexed reference rows**: <integer>
-3. Say: *"That's everything the app needs to run — one .env file, no
-   secret store. The app deploys to Hugging Face Spaces in one push."*
+Status messages stream in below the form, in this order:
 
-### G. (Optional) MCP demo at 3:15
+```text
+Analysis running
+Reviewing stripe-payments.png with offline fakes.        ← or "real APIs"
+
+Report ready
+Score: 76.4/100. Open Report.
+```
+
+Each agent also logs to your terminal — point judges at the terminal:
+
+```text
+visual_analysis: starting
+visual_analysis: returned in 0.12 s
+ux_critique:     starting
+ux_critique:     returned in 0.14 s
+...
+synthesizer:     composed report (overall_score=76.4)
+```
+
+This is the "visible logger errors" feature — every agent shouts when it
+starts and when it finishes, so a teammate debugging at 2 a.m. can find
+the failing agent in one grep.
+
+---
+
+### E. Tab 2 — **Report** (the money shot)
+
+The Report tab is where judges spend the most time. **Click it the moment
+the score appears in the status bar.**
+
+#### E.1. Reading the report top-to-bottom
+
+1. **Title** — "Design report" with subtitle "Synthesized from five
+   specialist agents." This is the synthesizer's signature.
+2. **Score block** — 44 px green pill. Stripe should land in the **70–82**
+   range. If it's <50 or >95, flag it as suspicious and check the agents
+   didn't get a placeholder image.
+3. **Top strengths** — 3–5 bullets. For Stripe, expect things like
+   "consistent indigo→purple gradient", "clear primary CTA", "dense
+   social proof above the fold".
+4. **Prioritized recommendations** — 3 cards. Each card has:
+   - **Title** (one short sentence).
+   - **Effort** pill (gold) — values 1 (small fix) to 5 (major rework).
+   - **Impact** pill (teal) — values 1 (cosmetic) to 5 (conversion-moving).
+   - **Rationale** sentence.
+   The synthesizer ranks by `impact / effort`, so card 1 is the best
+   bang-for-buck. Read card 1 aloud word-for-word.
+5. **Visual analysis** — three lines: layout description, hierarchy
+   description, density score (0–100, lower means more whitespace).
+6. **Accessibility** — `Contrast: pass` for Stripe. If you use a
+   different site and contrast fails, that's still a win — say *"the
+   accessibility agent flagged a real WCAG issue, that's the whole point."*
+7. **Market signals** — 3–5 bullets from Tavily/DuckDuckGo about the
+   product category. For Stripe, expect "developer experience", "global
+   payment coverage", "embedded checkout trends".
+
+#### E.2. What to say while pointing
+
+> *"This whole block came from one screenshot and one paragraph of context.
+> Five specialists ran in parallel — about 25 seconds end-to-end on real
+> APIs — and the synthesizer ranked the recommendations by impact over
+> effort. Look at card one: gold pill is effort, teal pill is impact, the
+> rationale is grounded in the visual and brand findings, not made up."*
+
+#### E.3. Empty state
+
+If the tab says "No report yet", you haven't clicked Run, or the run
+failed. Go back to Analyze, check the status block for the error, and
+either fix or use the offline-fakes fallback.
+
+---
+
+### F. Tab 3 — **References** (proof RAG + live web are real, not theatre)
+
+This tab proves the agents aren't hallucinating citations. There are two
+independent sources behind it: a local image RAG index (LanceDB +
+CLIP embeddings) and a live web search (Tavily, falling back to DuckDuckGo).
+
+#### F.1. What's on the tab
+
+| Element                   | What it does                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Search box + Search button| Submits a query to both LanceDB (image RAG) and Tavily/DuckDuckGo (web).                                           |
+| Similar references gallery| Local thumbnails from your reference index. Each tile shows `<id> - <similarity score>` (0.0–1.0, higher = closer).|
+| Reference notes card      | Status text — how many indexed rows, how many local files, which web provider returned the hits.                   |
+| Web references card       | Up to 5 live web hits with title (link), snippet, and provider (Tavily or DuckDuckGo).                             |
+
+#### F.2. Exact query for the Stripe demo
+
+Type this into the search box and press Enter:
+
+```text
+fintech payments landing page hero gradient
+```
+
+Why this query: it pulls visually-similar fintech landing pages from your
+LanceDB index AND web articles about hero-gradient design patterns —
+both of which are evidence the brand-consistency and market agents would
+have used during the report run.
+
+Alternative queries depending on the website you analyzed:
+
+| Website analyzed | Recommended query                                |
+| ---------------- | ------------------------------------------------ |
+| stripe.com       | `fintech payments landing page hero gradient`    |
+| notion.so        | `productivity tool landing page minimalist`      |
+| linear.app       | `dark theme product landing dense ui`            |
+| figma.com        | `pricing page tier comparison saas`              |
+| airbnb.com       | `marketplace search hero photography`            |
+| razorpay.com     | `india fintech payments mobile-first`            |
+
+#### F.3. What you should see
+
+- **Local gallery**: 4–12 thumbnails. If empty, you skipped `make ingest`
+  in step A. Narrate: *"Local index has zero rows because we haven't
+  ingested on this demo machine — the search path itself works, web
+  results are live."*
+- **Web references card**: 3–5 cards, each one externally clickable. If
+  Tavily is unset, the card header reads "Web references from
+  DuckDuckGo" — that's the open-source fallback, and that's deliberate.
+
+#### F.4. What to say while pointing
+
+> *"The gallery is image RAG over a CLIP-embedded LanceDB store of
+> reference designs we ingested. The card below is live web search via
+> Tavily, with DuckDuckGo as the open-source fallback. Together that's
+> how the brand and market agents get their evidence — they cannot ship a
+> citation that isn't in one of these two lists."*
+
+---
+
+### G. Tab 4 — **Settings** (deployability + cost story in 30 seconds)
+
+The Settings tab is read-only — it surfaces the runtime configuration so
+judges can verify nothing is hard-coded.
+
+#### G.1. What's on the tab
+
+| Line                       | What it means                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Real API key loaded        | `True` if `OPENROUTER_API_KEY` is set in `.env`; `False` otherwise. Live demo with real APIs requires `True`. |
+| USE_REAL in .env           | The default checkbox state on Tab 1. `True` means real-by-default; `False` means fakes-by-default.            |
+| Tavily key loaded          | `True` if `TAVILY_API_KEY` is set; `False` falls back to DuckDuckGo (still works, just rate-limited).         |
+| Local reference images     | Files matching `*.png|*.jpg|*.webp` under `data/reference/`. If 0, run `make ingest` after seeding the dir.    |
+| Indexed reference rows     | Rows in the LanceDB `design_references` table. Should equal "Local reference images" after ingestion.         |
+| Reports                    | Where on disk the JSON reports go (`data/reports/` by default). Useful for sharing with PMs.                  |
+
+#### G.2. What to say while pointing
+
+> *"Five lines of state: which keys are loaded, how many reference images
+> are indexed, and where reports get written. That's literally the entire
+> deploy contract — one `.env` file. We deploy to Hugging Face Spaces for
+> free; the FAQ documents the budget — under a dollar a day for hackathon
+> traffic."*
+
+---
+
+### H. (Optional) MCP demo at 3:15
 
 If you started `make mcp` in step B, switch to that terminal for one beat.
 
 Spoken line:
+
 > *"That terminal is the same agents exposed over MCP. Any MCP-compatible
 > client — Claude Code, an internal IDE, anything — can `tools/list` and
-> see `analyze_visual`, `audit_accessibility`, and so on. Same agents, two
-> surfaces."*
+> see `analyze_visual`, `audit_accessibility`, and so on. Same agents,
+> two surfaces."*
 
 You do **not** need a live MCP client connected — the running server is
-proof enough. If a judge insists, point at `src/mcp/server.py` in the file
-tree and at the `tools` list inside it.
+proof enough. If a judge insists, point at `src/mcp/server.py` in the
+file tree and at the `tools` list inside it.
 
-### H. Close the demo
+---
 
-Return to the **Report** tab so the score is the last thing on screen, then
-deliver the closing line at 3:50.
+### I. Close the demo
+
+Return to the **Report** tab so the score is the last thing on screen,
+then deliver the closing line at 3:50.
 
 ---
 
