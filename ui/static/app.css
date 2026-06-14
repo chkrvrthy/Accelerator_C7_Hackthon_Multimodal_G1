@@ -368,10 +368,9 @@ body {
 }
 
 /* Helper-text below the upload box and the run button.
- * The previous build relied on Gradio's default italic + faded grey
- * for these blocks, which fails contrast and makes the message look
- * disabled. Pin them to readable ink, normal weight, and surface them
- * as a calm pill so users can find them at a glance. */
+ * Gradio's default styling renders these as faded italic, which fails
+ * contrast and looks disabled. We only pin colour + weight here — no
+ * pill, no border, no decoration. Just make the text readable. */
 .upload-tip,
 .mode-tip,
 .upload-tip p,
@@ -384,31 +383,17 @@ body {
   -webkit-text-fill-color: var(--ink) !important;
   font-style: normal !important;
   font-weight: 500 !important;
-  font-size: 13.5px !important;
+  font-size: 13px !important;
   line-height: 1.55 !important;
   opacity: 1 !important;
 }
 
 .upload-tip,
 .mode-tip {
-  margin: 8px 0 4px !important;
-  padding: 10px 14px !important;
-  background: #f7f4fc !important;
-  border: 1px solid var(--line) !important;
-  border-left: 3px solid var(--teal) !important;
-  border-radius: 8px !important;
-}
-
-.upload-tip code,
-.mode-tip code,
-.upload-tip strong,
-.mode-tip strong {
-  background: rgba(94, 58, 156, 0.10) !important;
-  color: var(--teal-dark) !important;
-  -webkit-text-fill-color: var(--teal-dark) !important;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 700 !important;
+  margin: 6px 0 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
 }
 
 .status-card {
