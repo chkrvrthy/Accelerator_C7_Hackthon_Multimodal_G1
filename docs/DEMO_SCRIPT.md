@@ -28,6 +28,140 @@
 
 ---
 
+## Step-by-step worked example (exactly what to click and type)
+
+This is the literal click path for a clean demo. Copy-paste the exact strings.
+
+### A. Boot the app (one terminal)
+
+```bash
+cd <path-to>/ai_c7_hackathon
+# 1) Build (or refresh) the reference index — populates LanceDB so References
+#    tab has thumbnails to show.
+make ingest
+# Expected output ends with a line like:
+#   ingested N images into table 'design_references' (dim=512)
+
+# 2) Launch the UI.
+make ui
+# Expected output:
+#   * Running on local URL:  http://127.0.0.1:7860
+#   * To create a public link, set `share=True` in `launch()`.
+```
+
+Open `http://127.0.0.1:7860` in your browser.
+
+### B. (Optional) start the MCP server in a second terminal
+
+Only needed if you plan to demo the MCP wow-moment at 3:15.
+
+```bash
+cd <path-to>/ai_c7_hackathon
+make mcp
+# Expected: a stdio MCP server starts and waits for an MCP client to attach.
+# Leave this terminal visible on screen.
+```
+
+### C. Tab 1 — Analyze (the live run)
+
+1. **Image upload field** ("Design screenshot")
+   - Easiest: scroll to the **"Try the bundled sample"** row at the bottom of
+     the left panel and **click the row**. The file picker auto-fills with:
+     ```
+     src/fakes/fixtures/sample.png
+     ```
+   - Alternative if you want a more visually impressive screenshot: drag any
+     real PNG from your desktop into the upload area. Recommended size:
+     ≤ 2 MB and ≥ 800 × 600.
+
+2. **Context** textbox
+   - Paste this exact line. It hits all five specialists with concrete words
+     they each respond to:
+     ```
+     Audience: Indian retail banking customers age 25-45.
+     Brand: trustworthy, modern, accessible, mobile-first.
+     Goal: increase first-time deposit conversion on the welcome screen.
+     Market: competing with PhonePe and Paytm onboarding flows.
+     ```
+   - Why this string: "Indian retail banking" gives the market agent a real
+     query to web-search, "trustworthy/modern/accessible" gives brand and
+     accessibility a target, "first-time deposit conversion" gives UX a
+     goal, "PhonePe and Paytm" gives a comparison set.
+
+3. **Use real APIs from .env** checkbox
+   - Live demo, network uncertain → **uncheck it** (offline fakes, <1 s).
+   - Live demo, network solid + OpenRouter key set → **leave checked**
+     (real run, ~25 s, ~$0.03).
+
+4. **Run analysis** button
+   - Click once. Do not click again — the streaming status will update twice
+     ("Analysis running" → "Report ready").
+
+### D. Tab 2 — Report (the money shot)
+
+When the status flips to "Report ready: Score: 76.4/100. Open Report.",
+click the **Report** tab. You should see, in order:
+
+1. A 44 px score number with a green pill ("76.4 / 100 overall").
+2. **Top strengths** — three to five bullets.
+3. **Prioritized recommendations** — three cards, each with a gold
+   "Effort 2" pill and a teal "Impact 4" pill, then a one-sentence rationale.
+4. **Visual analysis**, **Accessibility**, **Market signals** sections.
+
+If the score is missing or the page says "No report yet", something failed —
+go to backup line A in the failure table.
+
+### E. Tab 3 — References (proves RAG + web search are real)
+
+1. Click the **References** tab.
+2. In the **Search** textbox, paste this exact string:
+   ```
+   fintech dashboard onboarding
+   ```
+3. Press Enter (or click **Search**).
+4. Two regions populate:
+   - **Image gallery** — thumbnails from your local LanceDB index (only
+     populated if you ran `make ingest` in step A). Each tile shows the
+     reference id and a similarity score.
+   - **Web references card** — five Tavily results with title + snippet +
+     external link, falling back to DuckDuckGo if `TAVILY_API_KEY` is unset.
+
+If the gallery is empty, narrate: *"Local index has zero rows because we
+haven't ingested any references on this demo machine — the search path
+itself works, web results are live."* Then move on.
+
+### F. Tab 4 — Settings (the deployability proof)
+
+1. Click the **Settings** tab.
+2. Read the four lines aloud as the camera lingers:
+   - **Real API key loaded**: True / False
+   - **Tavily key loaded**: True / False
+   - **Local reference images**: <integer>
+   - **Indexed reference rows**: <integer>
+3. Say: *"That's everything the app needs to run — one .env file, no
+   secret store. The app deploys to Hugging Face Spaces in one push."*
+
+### G. (Optional) MCP demo at 3:15
+
+If you started `make mcp` in step B, switch to that terminal for one beat.
+
+Spoken line:
+> *"That terminal is the same agents exposed over MCP. Any MCP-compatible
+> client — Claude Code, an internal IDE, anything — can `tools/list` and
+> see `analyze_visual`, `audit_accessibility`, and so on. Same agents, two
+> surfaces."*
+
+You do **not** need a live MCP client connected — the running server is
+proof enough. If a judge insists, point at `src/mcp/server.py` in the file
+tree and at the `tools` list inside it.
+
+### H. Close the demo
+
+Return to the **Report** tab so the score is the last thing on screen, then
+deliver the closing line at 3:50.
+
+---
+
 ## Spoken script (with screen cues)
 
 **Time markers are spoken-time. Keep transitions short — no dead air.**
