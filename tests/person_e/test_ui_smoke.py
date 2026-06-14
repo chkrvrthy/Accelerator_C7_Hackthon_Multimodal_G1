@@ -22,4 +22,8 @@ def test_ui_module_imports():
 def test_render_report_handles_none(fake_deps):
     from ui.app import render_report
 
-    assert render_report(None).startswith("_No report")
+    out = render_report(None)
+    # Contract: empty-state placeholder must mention "no report" so the user
+    # knows to run an analysis. Representation (markdown vs HTML vs plaintext)
+    # is up to the UI author and may evolve.
+    assert "no report" in out.lower()
