@@ -141,7 +141,7 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
 <header class="top">
   <div class="head-inner">
     <h1>Multimodal AI Design Analysis Suite</h1>
-    <p class="sub">Interactive walkthrough &middot; Accelerator C7 Hackathon &middot; Group 1</p>
+    <p class="sub">Interactive walkthrough &middot; Accelerator C7 Hackathon</p>
     <nav class="tabnav" id="tabnav">
       <button data-tab="cover" class="active">Cover</button>
       <button data-tab="architecture">Architecture</button>
@@ -160,7 +160,7 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
 <section id="tab-cover" class="tab active">
   <div class="hero">
     <h2>5 specialist AI agents review your UI design &mdash; in parallel.</h2>
-    <p class="lede">Upload a screenshot. A LangGraph orchestrator fans out to Visual, UX, Accessibility, Brand-Consistency, and Market-Research agents. Image RAG (CLIP + LanceDB) grounds the brand review against an in-house corpus. A synthesizer aggregates everything into one prioritized DesignReport. Same flow callable from any MCP-compatible client (Claude Code, etc.).</p>
+    <p class="lede">Upload a screenshot. A LangGraph orchestrator fans out to Visual, UX, Accessibility, Brand-Consistency, and Market-Research agents. Image RAG (CLIP + LanceDB) grounds the brand review against an in-house corpus. Deterministic <em>pre-tools</em> (k-means palette, OpenCV text-size, CTA density, &Delta;-E palette distance) feed each agent <code>&lt;measured_facts&gt;</code> so the LLM never has to invent numbers. A synthesizer aggregates everything into one prioritized DesignReport, gated by a pure-Python quality check that re-prompts once on regressions. Same flow callable from any MCP-compatible coding agent.</p>
     <div class="cta">
       <button class="btn" onclick="go('architecture')">Start the tour &rarr;</button>
       <button class="btn ghost" onclick="go('sequence')">Jump to sequence</button>
@@ -169,7 +169,9 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
   <div class="stats">
     <div class="stat"><span class="n">5</span><span class="l">parallel agents</span></div>
     <div class="stat"><span class="n">6 / 6</span><span class="l">sprints covered</span></div>
+    <div class="stat"><span class="n">7</span><span class="l">robustness pillars</span></div>
     <div class="stat"><span class="n">~4s</span><span class="l">end-to-end</span></div>
+    <div class="stat"><span class="n">37</span><span class="l">anti-hallucination tests</span></div>
     <div class="stat"><span class="n">5</span><span class="l">person team</span></div>
   </div>
   <div class="card">
@@ -187,13 +189,14 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
 <!-- ARCHITECTURE -->
 <section id="tab-architecture" class="tab">
   <h2>System architecture</h2>
-  <p class="lede">Solid arrows show runtime data flow. Dashed arrows show "consumes / instruments". Every internal seam is a Python <code>Protocol</code> &mdash; production and fake implementations both satisfy it.</p>
+  <p class="lede">Solid arrows show runtime data flow. Dashed arrows show "consumes / instruments". Every internal seam is a Python <code>Protocol</code> &mdash; production and fake implementations both satisfy it. Seven layers go beyond the curriculum: image safety gate, deterministic pre-tools, anti-hallucination prompt suite, parallel fan-out, quality-gate retry, cost tracker + circuit breaker, graceful UI banners.</p>
 
   <div class="card">
     <pre class="mermaid">
 flowchart TB
-    User[User] --> UI[Gradio UI&lt;br/&gt;ui/app.py]
-    UI --> Orchestrator[LangGraph Orchestrator&lt;br/&gt;src/agents/graph.py]
+    User[User] --> UI[Gradio UI&lt;br/&gt;ui/app.py + ui/handlers.py]
+    UI --> Safe[Image safety gate&lt;br/&gt;src/utils/safe_image.py]
+    Safe --> Orchestrator[LangGraph orchestrator&lt;br/&gt;src/agents/graph.py]
 
     subgraph rag [Image RAG layer]
         Embed[CLIP Embedder&lt;br/&gt;src/rag/embedder.py]
@@ -202,26 +205,55 @@ flowchart TB
         Embed --> VStore --> Retr
     end
 
-    subgraph agents [LangGraph Specialist Agents]
+    subgraph pretools [Pre-tools - LangChain @tool]
+        T1[extract_palette]
+        T2[estimate_text_size]
+        T3[cta_density]
+        T4[palette_distance]
+        T5[read_file / list_files / web_search]
+    end
+
+    subgraph agents [LangGraph specialist agents - parallel]
         VA[Visual Analysis]
         UX[UX Critique]
-        MR[Market Research]
         AC[Accessibility]
         BR[Brand Consistency]
+        MR[Market Research]
+    end
+
+    subgraph synth [Synthesis layer]
         SY[Synthesizer]
+        QG[Quality gate&lt;br/&gt;src/agents/quality_gate.py]
+        SY --> QG
+        QG -. fail-severity .-> SY
+    end
+
+    subgraph prompts [Anti-hallucination prompt suite]
+        P[src/utils/prompts/&lt;br/&gt;ANTI_HALLUCINATION + ABSTENTION rules]
     end
 
     Orchestrator --> VA
     Orchestrator --> UX
-    Orchestrator --> MR
     Orchestrator --> AC
     Orchestrator --> BR
+    Orchestrator --> MR
     VA --> SY
     UX --> SY
-    MR --> SY
     AC --> SY
     BR --> SY
-    SY --> Orchestrator
+    MR --> SY
+
+    T1 -. measured_facts .-> VA
+    T2 -. measured_facts .-> AC
+    T3 -. measured_facts .-> UX
+    T4 -. measured_facts .-> BR
+
+    P -. system prompt .-> VA
+    P -. system prompt .-> UX
+    P -. system prompt .-> AC
+    P -. system prompt .-> BR
+    P -. system prompt .-> MR
+    P -. system prompt .-> SY
 
     BR -. uses .-> Retr
     MR -. uses .-> WebSearch[Tavily / DDG&lt;br/&gt;src/tools/web_search.py]
@@ -230,18 +262,33 @@ flowchart TB
     AC -. uses .-> LLM
     BR -. uses .-> LLM
 
-    LLM --> OR[OpenRouter Gateway&lt;br/&gt;src/llm/openrouter_client.py]
-    OR --> Cache[Response Cache&lt;br/&gt;src/llm/cost.py]
+    LLM --> OR[OpenRouter gateway&lt;br/&gt;src/llm/openrouter_client.py]
+    OR --> CT[Cost tracker + circuit breaker&lt;br/&gt;src/llm/cost_tracker.py]
+    OR --> Cache[Disk cache&lt;br/&gt;src/llm/cost.py]
 
-    Orchestrator -. traces .-> LS[LangSmith]
-    Orchestrator --> Report[Final JSON Report&lt;br/&gt;data/reports/]
+    Orchestrator -. traces .-> LS[LangSmith&lt;br/&gt;src/utils/tracing.py]
+    QG --> Report[DesignReport JSON&lt;br/&gt;data/reports/]
     Report --> UI
 
-    MCP[MCP Server&lt;br/&gt;src/mcp/server.py] -. exposes .-> ExternalAgent[External Agents&lt;br/&gt;Claude Code / MCP clients]
+    MCP[MCP Server&lt;br/&gt;src/mcp/server.py] -. exposes .-> ExternalAgent[MCP clients]
     MCP -. calls .-> Orchestrator
     MCP -. calls .-> Retr
     </pre>
   </div>
+
+  <h3>Seven robustness pillars (beyond the curriculum)</h3>
+  <table class="coverage">
+    <thead><tr><th>Pillar</th><th>Lives in</th><th>What it prevents</th></tr></thead>
+    <tbody>
+      <tr><td>1. Image safety gate</td><td><code>src/utils/safe_image.py</code></td><td>30-100 MB uploads crashing the app or burning vision tokens.</td></tr>
+      <tr><td>2. Deterministic pre-tools</td><td><code>src/agents/tools.py</code> (LangChain <code>@tool</code>)</td><td>LLMs inventing palette hex codes, contrast ratios, CTA counts.</td></tr>
+      <tr><td>3. Anti-hallucination prompts</td><td><code>src/utils/prompts/_shared.py</code> + every agent</td><td>Fabricated competitors, invented WCAG SCs, made-up font names.</td></tr>
+      <tr><td>4. Parallel fan-out</td><td><code>src/agents/graph.py</code> (StateGraph, asyncio)</td><td>Sequential agent stalls; one slow specialist gating the rest.</td></tr>
+      <tr><td>5. Quality gate + 1-shot retry</td><td><code>src/agents/quality_gate.py</code></td><td>Empty recommendations, score never moving, missing rationales.</td></tr>
+      <tr><td>6. Cost tracker + circuit breaker</td><td><code>src/llm/cost_tracker.py</code></td><td>Runaway token spend; cascading failures when the API is down.</td></tr>
+      <tr><td>7. Graceful UI banners</td><td><code>ui/handlers.py::_classify_run_error</code></td><td>Python tracebacks reaching the user; auth errors leaking stack frames.</td></tr>
+    </tbody>
+  </table>
 
   <h3>Dependency-injection seam</h3>
   <p>Every agent receives an <code>AgentDeps</code> container. Real implementations and fakes both satisfy the Protocols, so any teammate can run their slice in isolation.</p>
@@ -338,11 +385,11 @@ flowchart TB
     <h3>Owns</h3>
     <ul class="simple-list">
       <li><code>src/config.py</code>, <code>src/contracts.py</code>, <code>src/fakes/*</code></li>
-      <li><code>src/llm/openrouter_client.py</code>, <code>src/llm/multimodal.py</code>, <code>src/llm/cost.py</code>, <code>src/llm/hf_local.py</code> (stub)</li>
-      <li><code>src/agents/base.py</code>, <code>src/agents/synthesizer.py</code>, <code>src/agents/graph.py</code></li>
-      <li><code>src/utils/tracing.py</code>, <code>src/evals/*</code>, <code>tests/conftest.py</code></li>
+      <li><code>src/llm/openrouter_client.py</code>, <code>src/llm/multimodal.py</code>, <code>src/llm/cost.py</code>, <code>src/llm/cost_tracker.py</code> (cost ledger + circuit breaker), <code>src/llm/hf_local.py</code> (stub)</li>
+      <li><code>src/agents/base.py</code>, <code>src/agents/synthesizer.py</code>, <code>src/agents/quality_gate.py</code>, <code>src/agents/graph.py</code>, <code>src/agents/tools.py</code> (LangChain <code>@tool</code> registry), <code>src/agents/_color_math.py</code></li>
+      <li><code>src/utils/tracing.py</code>, <code>src/utils/safe_image.py</code> (image safety gate), <code>src/utils/prompts/</code> (prompt package + anti-hallucination rules), <code>src/evals/*</code>, <code>tests/conftest.py</code></li>
     </ul>
-    <p class="magic"><strong>Demo magic moment:</strong> "watch all 5 agents run in parallel in this LangSmith trace &mdash; one click, four seconds, full report."</p>
+    <p class="magic"><strong>Demo magic moment:</strong> "watch all 5 agents run in parallel in this LangSmith trace &mdash; one click, four seconds, full report. The Settings tab shows live tokens spent, cache hits, and circuit-breaker state &mdash; we never burn money in a demo loop."</p>
   </article>
 
   <article class="person-pane" data-person-pane="b">
@@ -451,7 +498,12 @@ flowchart TB
     subgraph ownedE [Owned by Person E]
         MR[src/agents/market_research.py]
         WS[src/tools/web_search.py&lt;br/&gt;TavilySearch, DDGSearch]
-        UI[ui/app.py - Gradio]
+        UI[ui/app.py - Gradio shell]
+        UIH[ui/handlers.py - on_run + error banners]
+        UIR[ui/render.py - DesignReport HTML]
+        UIS[ui/state.py - settings + telemetry]
+        UIRefs[ui/references.py - References tab]
+        UIStyles[ui/styles.py + ui/static/app.css]
         MCP[src/mcp/server.py]
     end
     LLM[LLMClient&lt;br/&gt;contracts.py] -. consumed by .-> MR
@@ -550,14 +602,25 @@ sequenceDiagram
       <span class="badge badge-e">Person E</span>
       <span class="chev">&#9660;</span>
     </summary><div class="step-body">
-      <p>The Gradio file uploader saves the image to <code>data/uploads/&lt;ts&gt;-dashboard.png</code>. The "Run" handler is a generator that streams progress events back to the UI.</p>
-      <div class="filepath"><code>ui/app.py</code><button class="copy-btn" data-copy="ui/app.py">Copy</button></div>
-<pre><code class="language-python">def on_run(image, instructions, model_tier):
-    # LOGIC: persist the upload, then call run_graph as an async generator,
-    # yielding (log_line, partial_state) tuples to the UI.
-    image_path = save_upload(image)
-    for event in run_graph_stream(image_path, instructions=instructions):
-        yield event</code></pre>
+      <p>The Gradio file uploader hands a path to <code>on_run</code>. <em>Before any tokens are spent</em>, we run a pre-flight safety check: validates suffix, file size (&le; 20 MB), and pixel count (&le; 4 MP), and downsizes to 1024 px on the long edge. <code>UploadError</code> is the only non-Exception path; everything else gets wrapped in a wide try/except that yields a friendly banner via <code>_classify_run_error</code>.</p>
+      <div class="filepath"><code>ui/handlers.py</code><button class="copy-btn" data-copy="ui/handlers.py">Copy</button></div>
+<pre><code class="language-python">def on_run(image, instructions):
+    # 1. Image safety gate — preflight + auto-resize before any LLM call.
+    try:
+        preflight_image(raw_path)
+        image_path = downsize_for_pipeline(raw_path)
+    except UploadError as e:
+        yield (_status_message(e.user_title, e.user_body), {}, None); return
+
+    use_real = _default_real_mode()
+    deps = build_default_deps(use_real=use_real)
+    get_cost_tracker().reset()
+    try:
+        report = run_graph(image_path, instructions=instructions or None, deps=deps)
+        yield (_status_message("Report ready", ...), report.model_dump(), report.model_dump())
+    except Exception as e:
+        title, body = _classify_run_error(e)         # CircuitOpenError -> friendly banner
+        yield (_status_message(title, body), {}, None)</code></pre>
     </div></details></li>
 
     <li class="step"><details><summary>
@@ -753,16 +816,19 @@ return g.compile()</code></pre>
       <span class="badge badge-a">Person A</span>
       <span class="chev">&#9660;</span>
     </summary><div class="step-body">
-      <p>OpenAI SDK against <code>https://openrouter.ai/api/v1</code> with <code>response_format={"type":"json_schema",...}</code>. Returns a validated Pydantic instance.</p>
+      <p>OpenAI SDK against <code>https://openrouter.ai/api/v1</code> with <code>response_format={"type":"json_schema",...}</code>. The cost tracker logs every call; the circuit breaker fast-fails after a small burst of 5xx/429s. System prompts come from the <code>src/utils/prompts/</code> package and carry the shared <code>ANTI_HALLUCINATION_RULE</code> + <code>ABSTENTION_RULE</code>. Returns a validated Pydantic instance.</p>
       <div class="filepath"><code>src/llm/openrouter_client.py</code><button class="copy-btn" data-copy="src/llm/openrouter_client.py">Copy</button></div>
-<pre><code class="language-python">async def complete(self, *, system, user, schema, model=None, temperature=None):
+<pre><code class="language-python">@cached
+@_with_circuit_breaker
+async def complete(self, *, system, user, schema, model=None, temperature=None):
     resp = await self._client.chat.completions.create(
         model=model or settings.default_text_model,
-        messages=[{"role":"system","content":system},
+        messages=[{"role":"system","content":system},      # carries ANTI_HALLUCINATION + ABSTENTION rules
                   {"role":"user","content":user}],
         response_format={"type":"json_schema","json_schema":{
             "name": schema.__name__, "schema": schema.model_json_schema()}},
         temperature=temperature or settings.default_temperature)
+    get_cost_tracker().record(resp.usage)               # tokens + USD ledger for the Settings tab
     return schema.model_validate_json(resp.choices[0].message.content)</code></pre>
     </div></details></li>
 
@@ -792,6 +858,7 @@ return g.compile()</code></pre>
       <span class="badge badge-a">Person A</span>
       <span class="chev">&#9660;</span>
     </summary><div class="step-body">
+      <p>The synthesizer aggregates, then a pure-Python <code>quality_gate</code> checks for known regressions (empty top_recommendations, ratings collapsed to 50.0, missing rationales). On a fail-severity violation the synthesizer is re-prompted <strong>once</strong> with the violations appended to its user message. We intentionally cap retries at 1 for cost discipline.</p>
       <div class="filepath"><code>src/agents/synthesizer.py</code><button class="copy-btn" data-copy="src/agents/synthesizer.py">Copy</button></div>
 <pre><code class="language-python">async def run(state: GraphState, deps: AgentDeps) -> dict:
     payload = json.dumps({k: getattr(state, k).model_dump()
@@ -800,6 +867,12 @@ return g.compile()</code></pre>
         system=prompts.synthesizer_system(),
         user=payload,
         schema=DesignReport)
+    violations = quality_gate.check(report)              # pure-Python checks
+    if quality_gate.has_fail_severity(violations):
+        report = await deps.llm.complete(                # 1-shot retry with violations annotated
+            system=prompts.synthesizer_system(),
+            user=payload + "\n\nQUALITY_GATE_FAILED: " + json.dumps(violations),
+            schema=DesignReport)
     save_report(report, state.image_path)
     return {"report": report}</code></pre>
     </div></details></li>
@@ -929,22 +1002,22 @@ flowchart LR
   <table class="coverage">
     <thead><tr><th>Sprint</th><th>Concept</th><th>Where it lives</th><th>How we use it</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td>Prompt engineering (XML/JSON)</td><td><code>src/utils/prompts.py</code></td><td>Every agent system prompt; XML-tagged user prompts.</td></tr>
-      <tr><td>1</td><td>OpenAI Chat Completion standard</td><td><code>src/llm/openrouter_client.py</code></td><td>OpenAI SDK against OpenRouter base URL.</td></tr>
-      <tr><td>2</td><td>Gradio UI</td><td><code>ui/app.py</code></td><td>Upload, streaming progress, structured report tabs.</td></tr>
-      <tr><td>2</td><td>HuggingFace local model</td><td><code>src/llm/hf_local.py</code></td><td>Thin <code>LLMClient</code> stub using transformers.</td></tr>
-      <tr><td>3</td><td>RAG end-to-end</td><td><code>src/rag/*</code></td><td>Image RAG: ingest, embed, store, query.</td></tr>
+      <tr><td>1</td><td>Prompt engineering (XML/JSON)</td><td><code>src/utils/prompts/</code> package</td><td>Per-agent prompts + shared <code>ANTI_HALLUCINATION_RULE</code> / <code>ABSTENTION_RULE</code> in <code>_shared.py</code>; pinned by 37 regression tests in <code>tests/test_prompts.py</code>.</td></tr>
+      <tr><td>1</td><td>OpenAI Chat Completion standard</td><td><code>src/llm/openrouter_client.py</code></td><td>OpenAI SDK against OpenRouter base URL; structured-output via <code>response_format=json_schema</code>.</td></tr>
+      <tr><td>2</td><td>Gradio UI</td><td><code>ui/app.py</code> + <code>ui/handlers.py</code> + <code>ui/render.py</code> + <code>ui/state.py</code> + <code>ui/references.py</code> + <code>ui/styles.py</code> + <code>ui/static/app.css</code></td><td>4 tabs (Analyze, Report, References, Settings) with a streaming run button. Modular split keeps every module under 500 LOC.</td></tr>
+      <tr><td>2</td><td>HuggingFace local model</td><td><code>src/llm/hf_local.py</code></td><td>Thin <code>LLMClient</code> stub for documented offline-first deployment.</td></tr>
+      <tr><td>3</td><td>RAG end-to-end</td><td><code>src/rag/*</code></td><td>Image RAG: ingest, embed, store, query (CLIP + LanceDB).</td></tr>
       <tr><td>3</td><td>Chunking + embeddings</td><td><code>src/rag/embedder.py</code></td><td>open_clip ViT-B-32 image+text embeddings.</td></tr>
       <tr><td>3</td><td>LanceDB</td><td><code>src/rag/vector_store.py</code></td><td>Persistent k-NN store with optional metadata filters.</td></tr>
       <tr><td>3</td><td>LlamaIndex</td><td><code>src/rag/retriever.py</code></td><td>Imported as a documented secondary path.</td></tr>
       <tr><td>4</td><td>Evals</td><td><code>src/evals/harness.py</code></td><td>Schema-validity score over 3-5 golden cases.</td></tr>
       <tr><td>4</td><td>MCP</td><td><code>src/mcp/server.py</code></td><td>Two tools: <code>analyze_design</code> and <code>search_designs</code>.</td></tr>
-      <tr><td>5</td><td>LangChain tools</td><td><code>src/tools/rag_tool.py</code></td><td>BaseTool wrapping the Retriever protocol.</td></tr>
-      <tr><td>5</td><td>LangGraph multi-agent</td><td><code>src/agents/graph.py</code></td><td>StateGraph with parallel fan-out and synthesizer.</td></tr>
+      <tr><td>5</td><td>LangChain tools (<code>@tool</code>)</td><td><code>src/agents/tools.py</code></td><td>Pre-tools (palette, text size, CTA density, &Delta;-E) and basic tools (read_file, list_files, web_search) registered with <code>@tool</code> + per-agent ownership metadata.</td></tr>
+      <tr><td>5</td><td>LangGraph multi-agent</td><td><code>src/agents/graph.py</code></td><td>StateGraph with parallel fan-out, per-agent try/except, emergency report fallback.</td></tr>
       <tr><td>5</td><td>LangSmith tracing</td><td><code>src/utils/tracing.py</code></td><td>Graceful no-op if key missing; one trace per request.</td></tr>
-      <tr><td>5</td><td>Cost optimization</td><td><code>src/llm/cost.py</code></td><td>Disk-backed JSON cache keyed by prompt hash.</td></tr>
-      <tr><td>6</td><td>Parallel multi-agent</td><td><code>src/agents/graph.py</code></td><td>5 specialist branches run with asyncio.gather.</td></tr>
-      <tr><td>6</td><td>Structured aggregated output</td><td><code>src/agents/synthesizer.py</code></td><td>Merges 5 typed outputs into one DesignReport.</td></tr>
+      <tr><td>5</td><td>Cost optimization</td><td><code>src/llm/cost.py</code> + <code>src/llm/cost_tracker.py</code></td><td>Disk cache keyed by prompt hash + live token / USD ledger + circuit breaker.</td></tr>
+      <tr><td>6</td><td>Parallel multi-agent</td><td><code>src/agents/graph.py</code></td><td>5 specialist branches run via <code>asyncio.gather</code>; resilient per-agent error handling.</td></tr>
+      <tr><td>6</td><td>Structured aggregated output</td><td><code>src/agents/synthesizer.py</code> + <code>src/agents/quality_gate.py</code></td><td>Merges 5 typed outputs into one DesignReport, gated by a pure-Python quality check with a 1-shot retry on regressions.</td></tr>
     </tbody>
   </table>
 </section>

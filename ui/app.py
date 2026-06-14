@@ -130,7 +130,8 @@ Upload a screenshot. Add context if useful.
                         gr.Markdown(
                             "_Mode is read from `.env` — "
                             f"currently **{'real APIs' if _default_real_mode() else 'offline fakes'}**. "
-                            "Toggle `USE_REAL` in `.env` to switch._"
+                            "Toggle `USE_REAL` in `.env` to switch._",
+                            elem_classes=["mode-tip"],
                         )
                         gr.Examples(
                             examples=[

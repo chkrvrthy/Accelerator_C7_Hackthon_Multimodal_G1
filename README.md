@@ -28,7 +28,35 @@ short_description: Multi-agent design review with image RAG and OpenRouter.
 3. The synthesizer aggregates the five outputs into a `DesignReport` with
    top-3 strengths, top-5 prioritized recommendations, and an overall score.
 
-## Architecture (one mermaid diagram)
+## What the UI looks like
+
+![Analyze tab — pastel palette + WCAG AAA contrast](docs/images/ui_analyze.png)
+
+Four tabs: **Analyze** (above), **Report** (premium HTML rendering of the
+typed `DesignReport`), **References** (RAG hits + ad-hoc local + web
+search), **Settings** (live token / USD / cache telemetry, current model
+list, tool registry).
+
+## Architecture
+
+The diagrams below are rendered from `scripts/render_diagrams.py`
+(graphviz, no proprietary dependencies). Re-render anytime with
+`python scripts/render_diagrams.py`.
+
+### Top-level — user → UI → graph → agents → report
+
+![Top-level architecture](docs/images/architecture.png)
+
+### Agent fan-out detail — pre-tools, parallel branches, quality gate
+
+![Agent fan-out](docs/images/agent_fanout.png)
+
+### One click of "Run" — eight ordered steps
+
+![Run dataflow](docs/images/run_dataflow.png)
+
+A single mermaid version of the same flow (handy for GitHub PR previews
+that don't render PNGs):
 
 ```mermaid
 flowchart TB
