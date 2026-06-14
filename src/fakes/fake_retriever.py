@@ -6,6 +6,7 @@ This is what unblocks Person C's brand-consistency agent before Person B's
 LanceDB pipeline lands. Every call returns the same three references with
 descending similarity scores, so test assertions can pin exact ordering.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -27,9 +28,11 @@ class FakeRetriever:
         ensure_sample_design()
         # LOGIC: the path string here is what shows up in BrandConsistency
         # output; agents should not rely on it being absolute.
-        rel = str(SAMPLE_DESIGN.relative_to(Path.cwd())) if SAMPLE_DESIGN.is_relative_to(
-            Path.cwd()
-        ) else str(SAMPLE_DESIGN)
+        rel = (
+            str(SAMPLE_DESIGN.relative_to(Path.cwd()))
+            if SAMPLE_DESIGN.is_relative_to(Path.cwd())
+            else str(SAMPLE_DESIGN)
+        )
         self._refs = [
             RetrievedRef(
                 id="ref-007",

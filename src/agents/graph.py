@@ -59,6 +59,7 @@ HINTS
   to ``compiled.ainvoke(state)`` and use ``asyncio.gather`` in the
   fallback orchestrator. Today everything is sync — fine for v1.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -149,10 +150,7 @@ def run_graph(
     # TODO(person-a): use compiled.invoke or compiled.ainvoke for true
     # parallel scheduling. For now we call invoke which langgraph runs sync.
     final_state = compiled.invoke(state)
-    if isinstance(final_state, dict):
-        report = final_state.get("report")
-    else:  # GraphState
-        report = final_state.report
+    report = final_state.get("report") if isinstance(final_state, dict) else final_state.report
     assert isinstance(report, DesignReport), "graph must return a DesignReport"
     return report
 

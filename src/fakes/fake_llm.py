@@ -18,6 +18,7 @@ instance of that schema. Adding a new agent? Add one branch in ``_canned``.
 The LLM never inspects the prompt — that is the point: behavior is decoupled
 from prompt iteration.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,16 +27,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from src.schemas.outputs import (
-    AccessibilityReport,
-    BrandConsistency,
     CompetitorRef,
-    DesignReport,
     Finding,
-    MarketResearch,
     Recommendation,
     Severity,
-    UXCritique,
-    VisualAnalysis,
     WCAGFinding,
 )
 

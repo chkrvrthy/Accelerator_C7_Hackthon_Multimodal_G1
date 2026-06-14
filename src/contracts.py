@@ -44,6 +44,7 @@ HINTS
 - The ``model: str | None = None`` argument is the cost-tier hint — leave it
   alone in agent code; ``cost.select_model`` decides.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -153,4 +154,4 @@ class WebSearch(Protocol):
         ...
 
 
-__all__ = ["LLMClient", "VisionLLM", "Retriever", "WebSearch"]
+__all__ = ["LLMClient", "Retriever", "VisionLLM", "WebSearch"]

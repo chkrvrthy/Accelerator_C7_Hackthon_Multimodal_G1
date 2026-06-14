@@ -3,6 +3,7 @@
 We don't spin up a stdio server in tests; we just call the functions that
 ``main()`` will register. That keeps the test fast and deterministic.
 """
+
 from __future__ import annotations
 
 import pytest

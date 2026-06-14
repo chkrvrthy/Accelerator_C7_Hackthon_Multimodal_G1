@@ -1,4 +1,5 @@
 """Brand Consistency agent — happy path + zero-corpus fallback."""
+
 from __future__ import annotations
 
 import pytest

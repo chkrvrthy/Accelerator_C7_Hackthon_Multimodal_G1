@@ -39,9 +39,11 @@ DO NOT
 - Do not skip the SHA1 id — random UUIDs would explode the cache after one
   re-ingest and judges would notice the duplicate hits.
 """
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import sys
 from pathlib import Path
@@ -124,10 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     embedder = CLIPEmbedder()
     db = open_db()
     if args.clear:
-        try:
+        with contextlib.suppress(Exception):
             db.drop_table(settings.vector_collection)
-        except Exception:
-            pass  # table may not exist
     table = get_or_create_table(db, dim=embedder.dim)
 
     files = sorted(p for p in source.rglob("*") if p.suffix.lower() in SUPPORTED_EXTS)

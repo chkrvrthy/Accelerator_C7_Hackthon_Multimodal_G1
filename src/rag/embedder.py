@@ -50,10 +50,11 @@ PITFALLS
 - ``open_clip_torch`` ships many checkpoints; default
   ``ViT-B-32 / laion2b_s34b_b79k`` is small and CPU-runnable.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from src.config import settings
 from src.utils.logger import get_logger
@@ -71,7 +72,7 @@ class CLIPEmbedder:
     # LOGIC: class-level cache keyed by (model_name, pretrained) so re-creating
     # the embedder is free. Multi-process workers share through OS file cache,
     # not memory — ingest CLI is single-process so it's fine.
-    _shared: dict[str, Any] = {}
+    _shared: ClassVar[dict[str, Any]] = {}
 
     def __init__(
         self,
@@ -122,7 +123,7 @@ class CLIPEmbedder:
         return self._shared[key][:3]
 
     # ------------------------------------------------------------------
-    def embed_image(self, image: Path | str | "Image.Image") -> "np.ndarray":
+    def embed_image(self, image: Path | str | Image.Image) -> np.ndarray:
         """Return an L2-normalized 512-d float32 vector for one image."""
         # HINT: five-step recipe:
         #   1. model, preprocess, _ = self._ensure_loaded()
@@ -152,7 +153,7 @@ class CLIPEmbedder:
             emb = torch.nn.functional.normalize(emb, dim=-1)
         return emb.squeeze(0).cpu().numpy().astype("float32")
 
-    def embed_text(self, text: str) -> "np.ndarray":
+    def embed_text(self, text: str) -> np.ndarray:
         """Return an L2-normalized 512-d float32 vector for one query."""
         # HINT: four-step recipe:
         #   1. model, _, tokenizer = self._ensure_loaded()
@@ -171,7 +172,7 @@ class CLIPEmbedder:
             emb = torch.nn.functional.normalize(emb, dim=-1)
         return emb.squeeze(0).cpu().numpy().astype("float32")
 
-    def embed_batch(self, images: list[Path | str]) -> "np.ndarray":
+    def embed_batch(self, images: list[Path | str]) -> np.ndarray:
         """Optional bulk path used by the ingest CLI.
 
         Returns shape ``(N, dim)``.

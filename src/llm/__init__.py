@@ -10,6 +10,7 @@ OWNER: Person A
 SPRINT CONCEPTS: Sprint 1 (OpenAI Chat Completion standard), Sprint 2 (HF stub),
                  Sprint 5 (cost optimization).
 """
+
 # NOTE: keep this file import-cheap. Anything that pulls openai/transformers
 # must live behind a function so other slices stay snappy.
 

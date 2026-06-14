@@ -3,7 +3,10 @@
 OWNER: Person A
 Used by: Person E's market_research agent in tests and per-slice runs.
 """
+
 from __future__ import annotations
+
+from typing import ClassVar
 
 from src.schemas.outputs import SearchResult
 
@@ -11,7 +14,7 @@ from src.schemas.outputs import SearchResult
 class FakeSearch:
     """Three canned web hits, deterministic across runs."""
 
-    _hits = [
+    _hits: ClassVar[list[SearchResult]] = [
         SearchResult(
             title="Top fintech UI trends 2026",
             url="https://example.com/fintech-trends-2026",

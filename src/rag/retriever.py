@@ -47,6 +47,7 @@ DO NOT
 - Do not silently swallow an empty corpus. Return ``[]`` and let the
   brand agent's "no refs available" branch handle it gracefully.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,7 +63,7 @@ from src.utils.logger import get_logger
 # coverage; the production retrieval path below uses LanceDB directly for
 # speed. The full multimodal index is a documented post-MVP extension.
 try:  # pragma: no cover
-    from llama_index.core.indices.multi_modal import MultiModalVectorStoreIndex  # noqa: F401
+    from llama_index.core.indices.multi_modal import MultiModalVectorStoreIndex
 except ImportError:  # llama-index is a Person B install only
     MultiModalVectorStoreIndex = None  # type: ignore[assignment]
 
@@ -176,6 +177,7 @@ def _cli() -> int:
         # `python -m src.rag.retriever --text x` immediately, before
         # any reference designs are ingested.
         from src.fakes import FakeRetriever
+
         retriever = FakeRetriever()
 
     refs = (

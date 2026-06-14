@@ -1,4 +1,5 @@
 """Market Research agent — uses FakeSearch + FakeLLM by default."""
+
 from __future__ import annotations
 
 import pytest

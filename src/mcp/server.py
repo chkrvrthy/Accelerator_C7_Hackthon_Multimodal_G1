@@ -1,4 +1,29 @@
-"""MCP server exposing design-analysis tools over stdio."""
+"""MCP server exposing design-analysis tools over stdio.
+
+OWNER: Person E
+SPRINT CONCEPTS: Sprint 4 — Model Context Protocol.
+CONSUMES: ``mcp`` SDK (lazy import), ``agents.graph.run_graph``,
+          ``agents.base.build_default_deps``.
+PROVIDES: ``analyze_design_tool``, ``search_designs_tool`` (testable
+          callables), ``main()`` (FastMCP stdio server).
+
+WHY THIS FILE EXISTS
+--------------------
+The Gradio UI is for humans. This file is for *other AI agents*. Any
+MCP-compatible client (Claude Code, Continue, Cline, Zed, ...) can spawn
+this server, list its tools, and invoke them as if they were native
+function calls. Same backend; two completely different surface areas.
+
+DEFINITION OF DONE
+------------------
+[x] ``analyze_design_tool`` runs the full graph and returns a serializable
+    DesignReport dict.
+[x] ``search_designs_tool`` returns a list of RetrievedRef dicts.
+[x] ``main`` registers both as ``@mcp.tool()`` and starts a stdio server.
+[x] Importing this module does NOT pull the mcp SDK (lazy import inside
+    ``main``) so non-Person-E slices stay import-cheap.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

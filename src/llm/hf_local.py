@@ -38,6 +38,7 @@ POST-MVP (if you have spare time on Day 2)
 - Add a flag to ``AgentDeps.from_env()`` that wires this client instead of
   OpenRouter for an offline demo.
 """
+
 from __future__ import annotations
 
 import json
@@ -109,7 +110,7 @@ class HFLocalClient:
         system: str,
         user: str,
         schema: type[BaseModel],
-        model: str | None = None,  # noqa: ARG002 — kept for protocol compatibility
+        model: str | None = None,
         temperature: float | None = None,
     ) -> BaseModel:
         """Run the local model and validate JSON against ``schema``.

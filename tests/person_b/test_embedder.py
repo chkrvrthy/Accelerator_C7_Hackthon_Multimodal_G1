@@ -4,6 +4,7 @@ Person B replaces ``pytest.importorskip("torch")`` with real torch + open_clip
 once the slice is wired. Until then this test only verifies the class exists
 and emits a useful error.
 """
+
 from __future__ import annotations
 
 import pytest

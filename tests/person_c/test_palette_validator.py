@@ -4,6 +4,7 @@ The validator keeps only valid hex colors so UI swatches never choke on a
 hallucinated color name, while staying lenient (filter, not raise) so one bad
 entry never fails the whole graph.
 """
+
 from __future__ import annotations
 
 import pytest

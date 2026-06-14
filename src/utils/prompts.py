@@ -1,7 +1,12 @@
-"""
-Centralized prompt library.
+"""Centralized prompt library.
 
-Why this file exists:
+OWNER: Shared (every agent author edits their own prompt; do not rewrite others').
+SPRINT CONCEPTS: prompt engineering, structured output (JSON-schema mode).
+CONSUMES: ``schemas.outputs`` (for state/ref typing).
+PROVIDES: one system + one user prompt builder per agent.
+
+WHY THIS FILE EXISTS
+--------------------
 - Prompts are *the* product. Versioning them in one place makes A/B testing
   easy and reviewable.
 - Every agent imports its system prompt from here. Don't inline prompts
@@ -12,6 +17,7 @@ Tip for the team:
   industry, brand guidelines, etc.) without string-format gymnastics
   scattered around the codebase.
 """
+
 from __future__ import annotations
 
 from textwrap import dedent
@@ -64,7 +70,7 @@ def visual_analysis_system() -> str:
     )
 
 
-def visual_analysis_user(state: "GraphState") -> str:
+def visual_analysis_user(state: GraphState) -> str:
     """Build the visual-analysis user message, folding in UI instructions.
 
     Lives here (not in the agent) so prompt iteration happens in one file.
@@ -227,16 +233,14 @@ def brand_consistency_system() -> str:
     )
 
 
-def brand_consistency_user(refs: "list[RetrievedRef]") -> str:
+def brand_consistency_user(refs: list[RetrievedRef]) -> str:
     """Build the brand-consistency user message.
 
     Surfaces each retrieved ref's id + similarity score so the LLM knows how
     confident retrieval was and can only cite ids that actually exist.
     """
     if refs:
-        ref_lines = "\n".join(
-            f"  - id={r.id} (similarity={r.score:.2f})" for r in refs
-        )
+        ref_lines = "\n".join(f"  - id={r.id} (similarity={r.score:.2f})" for r in refs)
         ref_block = f"Retrieved references (most to least similar):\n{ref_lines}"
     else:
         ref_block = "Retrieved references: (none available)"

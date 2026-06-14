@@ -1,4 +1,5 @@
 """Synthesizer aggregates fake outputs into a valid DesignReport."""
+
 from __future__ import annotations
 
 import pytest
