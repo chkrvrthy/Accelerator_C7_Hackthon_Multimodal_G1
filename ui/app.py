@@ -1,20 +1,26 @@
 """Gradio UI for the Multimodal AI Design Analysis Suite."""
 from __future__ import annotations
 
+import sys
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
-from src.agents.base import AgentDeps, build_default_deps
-from src.agents.graph import run_graph
-from src.config import settings
-from src.schemas.outputs import DesignReport
-from src.utils.logger import get_logger
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.agents.base import AgentDeps, build_default_deps  # noqa: E402
+from src.agents.graph import run_graph  # noqa: E402
+from src.config import settings  # noqa: E402
+from src.schemas.outputs import DesignReport  # noqa: E402
+from src.utils.logger import get_logger  # noqa: E402
 
 log = get_logger(__name__)
 
 APP_CSS = """
 :root {
+  color-scheme: light;
   --surface: #fbfaf6;
   --ink: #1d2528;
   --muted: #415054;
@@ -27,6 +33,11 @@ APP_CSS = """
   --green-soft: #e7f4ef;
   --coral-soft: #faece8;
   --gold-soft: #f7efd8;
+}
+
+html,
+body {
+  color-scheme: light;
 }
 
 .gradio-container {
@@ -450,6 +461,38 @@ button.primary,
 }
 """
 
+FORCE_LIGHT_THEME_JS = """
+() => {
+  const root = document.documentElement;
+  root.classList.remove("dark");
+  root.classList.add("light");
+  root.dataset.theme = "light";
+  localStorage.setItem("theme", "light");
+  localStorage.setItem("__theme", "light");
+  localStorage.setItem("gradio-theme", "light");
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("__theme") !== "light") {
+    params.set("__theme", "light");
+    const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }
+
+  return [];
+}
+"""
+
+FORCE_LIGHT_THEME_HEAD = """
+<script>
+  document.documentElement.classList.remove("dark");
+  document.documentElement.classList.add("light");
+  document.documentElement.dataset.theme = "light";
+  localStorage.setItem("theme", "light");
+  localStorage.setItem("__theme", "light");
+  localStorage.setItem("gradio-theme", "light");
+</script>
+"""
+
 
 def _status_message(title: str, body: str) -> str:
     return f"""
@@ -754,6 +797,8 @@ or screenshots where important text is unreadable.
         server_port=7860,
         theme=gr.themes.Soft(),
         css=APP_CSS,
+        js=FORCE_LIGHT_THEME_JS,
+        head=FORCE_LIGHT_THEME_HEAD,
     )
 
 
