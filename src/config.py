@@ -75,11 +75,17 @@ class Settings(BaseSettings):
     #     want 0.6+; override per-call via deps.llm.complete(..., temperature=...)
     #     instead of changing this default.
     default_temperature: float = Field(default=0.2)
-    # LOGIC: 2048 was tight for the synthesizer when it has to emit a full
-    # nested DesignReport. 4096 gives every agent breathing room for a
-    # complete structured output even on a chatty model, while still capping
-    # cost predictably (~$0.01-0.02 per call on gpt-5-mini at typical usage).
-    default_max_tokens: int = Field(default=4096)
+    # LOGIC: 8192 leaves room for both the JSON output AND the reasoning
+    # tokens that GPT-5 / o1 / o3 burn before producing visible content.
+    # Empirical floor on multi-image multimodal calls:
+    #   * 2048 -> truncated mid-string (Pydantic "EOF while parsing")
+    #   * 4096 -> empty content on 3 of 4 parallel agents
+    #   * 8192 -> all 4 agents complete cleanly (~1.5 KB output, ~0.5 KB
+    #     reasoning at effort=minimal, ~0.5 KB system prompt overhead)
+    # The OpenRouter client also auto-bumps to 8192 specifically for
+    # reasoning models even when a smaller value is set here, so this
+    # ceiling protects non-reasoning model budgets.
+    default_max_tokens: int = Field(default=8192)
 
     # -------- Web search ----------------------------------------------------
     tavily_api_key: str = Field(default="")

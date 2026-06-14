@@ -88,6 +88,51 @@ _HARD_FAILURES = (
 )
 _MAX_RETRIES = 3
 
+# OpenAI's reasoning model families. These spend a portion of
+# ``max_tokens`` on hidden chain-of-thought BEFORE producing visible
+# content. With a 4 KB token budget and a multi-image prompt, the
+# reasoning often consumes the entire budget and the SDK returns
+# ``content=""`` with ``finish_reason="length"`` — which our pipeline
+# raises as "OpenRouter returned empty content for X". Truncated JSON
+# (``EOF while parsing a string``) is the same bug at a slightly
+# different point — the model started JSON output, then ran out.
+#
+# Mitigation: when we detect a reasoning-family model, send
+# ``extra_body={"reasoning": {"effort": "minimal", "exclude": True}}``
+# to OpenRouter so the model spends ~10% of the budget on thinking and
+# the rest on the JSON we actually want. See
+# https://openrouter.ai/docs/guides/best-practices/reasoning-tokens .
+_REASONING_MODEL_PREFIXES: tuple[str, ...] = (
+    "openai/gpt-5",
+    "openai/o1",
+    "openai/o3",
+    "openai/o4",
+    "x-ai/grok-4",
+)
+
+
+def _is_reasoning_model(model_id: str) -> bool:
+    """True for OpenAI reasoning families that need the effort cap."""
+    if not model_id:
+        return False
+    m = model_id.lower()
+    return any(m.startswith(p) for p in _REASONING_MODEL_PREFIXES)
+
+
+def _build_extra_body(model_id: str) -> dict[str, Any]:
+    """Per-model OpenRouter ``extra_body`` overrides.
+
+    Returns the dict to pass via the OpenAI SDK's ``extra_body`` kwarg.
+    For non-reasoning models this is empty. For reasoning models we
+    pin ``effort="minimal"`` and ``exclude=True`` so:
+      * Reasoning takes ~10% of ``max_tokens`` (not 50-95%).
+      * The reasoning trace is NOT serialized back — we don't render it
+        in the UI, so the bytes are wasted.
+    """
+    if _is_reasoning_model(model_id):
+        return {"reasoning": {"effort": "minimal", "exclude": True}}
+    return {}
+
 
 class OpenRouterClient:
     """Real ``LLMClient`` — OpenAI SDK pointed at OpenRouter."""
@@ -175,6 +220,17 @@ class OpenRouterClient:
         rf = self._schema_payload(schema)
         last_exc: Exception | None = None
 
+        # Per-model overrides (e.g. reasoning effort cap for GPT-5/o1/o3
+        # so they don't burn the entire token budget on hidden CoT).
+        extra_body = _build_extra_body(model)
+        # Reasoning models need a fatter token budget — even with
+        # ``effort=minimal`` they reserve ~10% for thinking, and a
+        # multi-image multimodal prompt can need 1.5-2 KB just for
+        # the JSON output. 8K is a safe ceiling.
+        max_tokens = self.settings.default_max_tokens
+        if _is_reasoning_model(model):
+            max_tokens = max(max_tokens, 8192)
+
         for attempt in range(_MAX_RETRIES):
             try:
                 resp = self._client().chat.completions.create(
@@ -182,7 +238,8 @@ class OpenRouterClient:
                     messages=messages,
                     response_format=rf,
                     temperature=temperature,
-                    max_tokens=self.settings.default_max_tokens,
+                    max_tokens=max_tokens,
+                    extra_body=extra_body or None,
                 )
                 raw = resp.choices[0].message.content or ""
                 # Record token usage when the provider returned it — this
@@ -195,6 +252,25 @@ class OpenRouterClient:
                     completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
                 )
                 breaker.record_success()
+                # SURFACE the "empty content + reasoning model" failure with
+                # actionable guidance BEFORE we raise. Without this users
+                # see a generic "empty content" error and have no idea why.
+                if not raw and _is_reasoning_model(model):
+                    finish_reason = getattr(
+                        resp.choices[0], "finish_reason", "unknown"
+                    )
+                    log.warning(
+                        "openrouter: %s returned empty content (finish=%s) — "
+                        "this is the reasoning-model token-budget bug. We "
+                        "already sent reasoning.effort=minimal and bumped "
+                        "max_tokens to %d. If it still empties out, switch "
+                        "DEFAULT_VISION_MODEL to a non-reasoning model "
+                        "(openai/gpt-4o-mini, anthropic/claude-3.5-haiku) "
+                        "in .env / Spaces secrets.",
+                        model,
+                        finish_reason,
+                        max_tokens,
+                    )
                 return self._validate_or_fallback(raw, schema)
 
             except Exception as e:
@@ -304,7 +380,19 @@ class OpenRouterClient:
 
     @staticmethod
     def _validate_or_fallback(raw: str, schema: type[BaseModel]) -> BaseModel:
-        """Validate JSON; if the model wrapped it in markdown, strip and retry once."""
+        """Validate JSON; if the model wrapped it in markdown, strip and retry once.
+
+        Common failure shapes we recognize:
+          * ``raw == ""`` — empty content. Caller already logged the
+            reasoning-model hint above; we just translate to ValueError.
+          * ``raw`` ends mid-string (``"... rest of`` then EOF). This is
+            the reasoning-model "out of tokens" bug. Pydantic raises
+            ``Invalid JSON: EOF while parsing a string at line N column M``.
+            We let that bubble up — the agent error log + the warning
+            from the caller is enough context for the user to act.
+          * ``raw`` wrapped in ```` ```json ... ``` ```` markdown — we
+            strip the fence and retry ONCE before giving up.
+        """
         if not raw:
             raise ValueError(f"OpenRouter returned empty content for {schema.__name__}")
         try:
