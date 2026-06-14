@@ -169,7 +169,7 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
   <div class="stats">
     <div class="stat"><span class="n">5</span><span class="l">parallel agents</span></div>
     <div class="stat"><span class="n">6 / 6</span><span class="l">sprints covered</span></div>
-    <div class="stat"><span class="n">7</span><span class="l">robustness pillars</span></div>
+    <div class="stat"><span class="n">8</span><span class="l">robustness pillars</span></div>
     <div class="stat"><span class="n">~4s</span><span class="l">end-to-end</span></div>
     <div class="stat"><span class="n">37</span><span class="l">anti-hallucination tests</span></div>
     <div class="stat"><span class="n">5</span><span class="l">person team</span></div>
@@ -182,6 +182,30 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
       <li>Color chips identify ownership: <span class="badge badge-a">A</span> <span class="badge badge-b">B</span> <span class="badge badge-c">C</span> <span class="badge badge-d">D</span> <span class="badge badge-e">E</span>.</li>
       <li>Print this page (Ctrl/Cmd+P) for a paper handout &mdash; print stylesheet flattens all tabs.</li>
     </ul>
+  </div>
+
+  <h3 style="margin-top:32px">What the UI looks like</h3>
+  <p style="color:var(--fg-muted);max-width:780px">
+    The Analyze tab with the inline help disclosure expanded.
+    Long-form expectations live behind one click; field-level <code>i</code>
+    tooltips carry the one-liner. Same WCAG-AAA palette in light + dark.
+  </p>
+  <div class="card" style="padding:0;overflow:hidden">
+    <img src="images/ui_hero.png" alt="Lead screenshot — Analyze tab with the help disclosure expanded" style="display:block;width:100%;height:auto">
+  </div>
+  <div class="stats" style="margin-top:18px">
+    <div class="card" style="padding:0;overflow:hidden;margin:0">
+      <img src="images/ui_analyze.png" alt="Analyze tab — default state" style="display:block;width:100%;height:auto">
+      <div style="padding:10px 14px;color:var(--fg-muted);font-size:12.5px"><b>Analyze</b> &mdash; drop 1&ndash;5 screenshots, label the frames, type context.</div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;margin:0">
+      <img src="images/ui_references.png" alt="References tab — Brand and Market agent homework" style="display:block;width:100%;height:auto">
+      <div style="padding:10px 14px;color:var(--fg-muted);font-size:12.5px"><b>References</b> &mdash; what Brand + Market agents looked at; ad-hoc search below.</div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;margin:0">
+      <img src="images/ui_settings.png" alt="Settings tab — read-only diagnostics with source badges" style="display:block;width:100%;height:auto">
+      <div style="padding:10px 14px;color:var(--fg-muted);font-size:12.5px"><b>Settings</b> &mdash; read-only diagnostics; <code>.env</code> / code / auto badges.</div>
+    </div>
   </div>
 </section>
 <!-- /COVER -->
@@ -534,26 +558,26 @@ flowchart TB
 sequenceDiagram
     autonumber
     participant U as Designer
-    participant UI as Gradio UI&lt;br/&gt;Person E
-    participant G as graph.run_graph&lt;br/&gt;Person A
-    participant V as Visual Agent&lt;br/&gt;Person C
-    participant UX as UX Agent&lt;br/&gt;Person D
-    participant AC as A11y Agent&lt;br/&gt;Person D
-    participant BR as Brand Agent&lt;br/&gt;Person C
-    participant MR as Market Agent&lt;br/&gt;Person E
-    participant R as LanceRetriever&lt;br/&gt;Person B
-    participant W as TavilySearch&lt;br/&gt;Person E
-    participant L as VisionLLM/LLM&lt;br/&gt;Person A
-    participant SY as Synthesizer&lt;br/&gt;Person A
+    participant UI as Gradio UI (Person E)
+    participant G as graph.run_graph (Person A)
+    participant V as Visual Agent (Person C)
+    participant UX as UX Agent (Person D)
+    participant AC as A11y Agent (Person D)
+    participant BR as Brand Agent (Person C)
+    participant MR as Market Agent (Person E)
+    participant R as LanceRetriever (Person B)
+    participant W as TavilySearch (Person E)
+    participant L as VisionLLM/LLM (Person A)
+    participant SY as Synthesizer (Person A)
 
     U->>UI: drop 1..5 PNG/JPG + labels + Run
     UI->>G: run_graph(image_paths, instructions, frame_labels)
-    note over G: build_default_deps(use_real=True)&lt;br/&gt;compile StateGraph&lt;br/&gt;pad frame_labels with filename stems
+    Note over G: build_default_deps(use_real=True), compile StateGraph, pad frame_labels with filename stems
 
-    par parallel fan-out at START — every vision agent sees ALL frames
+    par parallel fan-out at START
         G->>V: await run(state, deps)
         V->>L: vision.analyze(images=N, schema=VisualAnalysis)
-        L-->>V: VisualAnalysis (cites frames by label)
+        L-->>V: VisualAnalysis with per-frame citations
     and
         G->>UX: await run(state, deps)
         UX->>L: vision.analyze(images=N, schema=UXCritique)
@@ -564,11 +588,8 @@ sequenceDiagram
         L-->>AC: AccessibilityReport
     and
         G->>BR: await run(state, deps)
-        loop for each frame
-            BR->>R: retrieve_by_image(frame_i, k=5)
-            R-->>BR: list of RetrievedRef
-        end
-        note over BR: dedupe by id; record matched_frames; top-5 global
+        BR->>R: retrieve_by_image per frame, k equals 5
+        R-->>BR: deduped RetrievedRef list with matched_frames
         BR->>L: vision.analyze(composite, schema=BrandConsistency)
         L-->>BR: BrandConsistency
     and
@@ -586,14 +607,14 @@ sequenceDiagram
     MR-->>G: market
 
     G->>SY: await run(state, deps)
-    note over SY: synthesizer sees frame_labels in&lt;br/&gt;&lt;multi_frame_synthesis&gt; user block
+    Note over SY: synthesizer sees frame_labels in the multi_frame_synthesis user block
     SY->>L: llm.complete(5 outputs + labels, schema=DesignReport)
-    L-->>SY: DesignReport with per_frame_scores&lt;br/&gt;+ affected_frames per recommendation
-    note over SY: scrub hallucinated labels server-side&lt;br/&gt;against canonical state.frame_labels
+    L-->>SY: DesignReport with per_frame_scores and affected_frames
+    Note over SY: scrub hallucinated labels server-side against canonical state.frame_labels
     SY-->>G: report
 
     G-->>UI: DesignReport JSON streamed
-    UI-->>U: render Report tab (frame strip + heatmap + affected_frames badges)&lt;br/&gt;+ save data/reports/&lt;ts&gt;.json
+    UI-->>U: render Report tab plus save data/reports/timestamp.json
     </pre>
   </div>
 
