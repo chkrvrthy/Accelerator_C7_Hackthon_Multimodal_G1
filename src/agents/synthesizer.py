@@ -20,7 +20,7 @@ LOGIC OUTLINE
 -------------
 1. Concatenate the five specialist outputs into a structured XML block.
 2. Ask a text LLM to produce the DesignReport.
-3. Persist to ``settings.report_dir/design_report_<id>.json``.
+3. Persist to ``settings.report_dir/design_report_<ts>_<id>.json``.
 4. Return ``{"report": ...}``.
 
 DEFINITION OF DONE
@@ -281,7 +281,22 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
         if rec.priority < 1:
             rec.priority = i
 
-    out_path = _cfg.settings.report_dir / f"design_report_{report.run_id}.json"
+    # Filename pattern: ``design_report_<sortable-ts>_<run_id>.json``.
+    # Why timestamp+run_id (not run_id alone)?
+    #   * Sortable. ``ls -1`` on data/reports/ shows runs in chronological
+    #     order without a stat call. Judges and teammates immediately see
+    #     "the report I just made" — no mtime peeking.
+    #   * Cross-platform. Colons are illegal on Windows so we replace
+    #     ``:`` with ``-`` in the ISO timestamp, keeping the same shape
+    #     on Linux/macOS.
+    #   * Persistent. We never delete old reports here — that's the user's
+    #     call via ``make clean-runs``. Hackathon judges may re-grade by
+    #     diffing two runs; losing history would break that.
+    fs_stamp = report.analyzed_at.replace(":", "-")
+    out_path = (
+        _cfg.settings.report_dir
+        / f"design_report_{fs_stamp}_{report.run_id}.json"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.model_dump_json(indent=2))
 

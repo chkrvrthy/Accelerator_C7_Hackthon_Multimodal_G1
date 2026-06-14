@@ -11,27 +11,37 @@
 
 ## Pre-flight checklist (T-5 minutes)
 
-1. `make ingest` — confirm reference index has rows. If empty, the References
-   tab will say "No indexed matches yet" and that's a visible weakness.
-2. `python ui/app.py` — wait for `Running on local URL: http://127.0.0.1:7860`.
-3. Open the URL in a clean browser window. Zoom level 100%. Close DevTools.
-4. Pre-stage the bundled sample: in **Analyze**, click "Try the bundled sample"
-   so the file picker is already filled. Do **not** click Run yet.
-5. **Decide mode** — set in `.env`, NOT in the UI (the UI has no toggle).
+1. **Fresh state** — run `make clean-runs` to wipe `data/reports/*` and
+   `data/logs/*`. The Settings tab will then show zero accumulated
+   reports and the log file starts empty so judges only see *this*
+   demo's events. Cache is preserved (re-runs stay instant). Add
+   `CLEAN_CACHE=1` to also wipe the response cache.
+2. `make ingest` — confirm reference index has rows. If empty, the
+   References tab top section will say *"Empty brand-RAG corpus. Drop
+   a few reference images into data/reference/ and run `make ingest`"*.
+3. `python ui/app.py` — wait for two lines:
+   - `* Running on local URL: http://127.0.0.1:7860`
+   - `* Logs are tee'd to: <path>/data/logs/app.log` ← copy this; you'll `tail -f` it.
+4. Open the URL in a clean browser window. Zoom level 100%. Close DevTools.
+5. Pre-stage the bundled sample: in **Analyze**, click the
+   "Try the bundled sample (one-click prefill)" row so the file picker
+   is already filled. Do **not** click Run yet.
+6. **Decide mode** — set in `.env`, NOT in the UI (the UI has no toggle).
    - Real APIs: `USE_REAL=true` and `OPENROUTER_API_KEY=sk-or-...` in `.env`.
-     ~25 s per run, ~$0.03.
+     ~25 s per run, ~$0.03 (single frame); ~$0.05 (3 frames); ~$0.08 (5 frames).
    - Offline fakes: `USE_REAL=false` (or simply omit the flag). Returns in
      <1 s, $0. **Recommended for live demo unless your network and
      OpenRouter key are both rock solid.**
    - The Analyze tab shows the active mode under the Run button as
      "_Mode is read from `.env` — currently **real APIs** / **offline fakes**_".
    - The Settings tab confirms `USE_REAL` and `OPENROUTER_API_KEY` are loaded.
-6. Keep a terminal visible with `tail -f data/logs/app.log` if real APIs
-   are on (the launch banner prints this exact path) so judges can see
-   the LangSmith trace IDs land. Auto-rotates at 10 MB; `LOG_TO_FILE=0`
-   in `.env` disables.
-7. Have `docs/walkthrough.html` open in a second tab as a fallback. If the
-   live demo dies, share that tab and narrate from the diagram.
+7. Keep a terminal visible with `tail -f data/logs/app.log` (path from
+   step 3). With real APIs on, judges see LangSmith trace IDs land;
+   with fakes on, they see the per-agent INFO lines. Each run is
+   bracketed by `RUN START session=<id>` / `RUN END session=<id>` so
+   you can `grep "RUN START" data/logs/app.log` to count runs.
+8. Have `docs/walkthrough.html` open in a second tab as a fallback. If
+   the live demo dies, share that tab and narrate from the diagram.
 
 ---
 
@@ -129,20 +139,22 @@ agents enough signal:
 The Analyze tab is the only tab that produces work. The other three tabs
 read state. Give it 90 seconds of attention.
 
-#### D.1. What's on the tab
+#### D.1. What's on the tab (top to bottom)
 
-| Element               | What it does                                                                                                                |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Hero band             | Rubric-friendly title + the five capability chips (Visual / UX / Accessibility / Brand / Market). Read this aloud once.     |
-| Steps strip           | Visual reminder of the flow (Upload → Add context → Review). Don't click — it's narrative scaffolding.                      |
-| Design screenshots    | File upload — accepts **1 to 5** PNG/JPG/WEBP files, drag-and-drop or click-to-browse. Multiple files = comparison mode.    |
-| Frame labels          | Optional textbox, one label per line in upload order ("Hero" / "Pricing" / "Dashboard"). Missing → filename stem fallback.  |
-| Context               | Free-text notes: audience, brand, goal, market. **Every word here is fed to all five agents** — concrete words win.         |
-| Mode banner           | Read-only line beneath Run, shows whether `.env` has real APIs or fakes active. Switch by editing `.env`, not the UI.       |
-| Run analysis (button) | Kicks off the LangGraph DAG. Streams status back into the page.                                                             |
-| Try the bundled sample| Auto-fills the form with `src/fakes/fixtures/sample.png`. Useful if real upload fails — do not use for the real demo.       |
-| Do upload / Don't / What you'll get | Three info cards on the right. They are pure documentation; no interaction.                                   |
-| Raw structured report | Collapsed accordion below the run button. Expand only if a judge asks "show me the raw JSON".                               |
+| Element                       | What it does                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Hero band                     | Rubric-friendly title + the five capability chips (Visual / UX / Accessibility / Brand / Market). Read aloud once.          |
+| Steps strip                   | Visual reminder of the flow (Upload → Add context → Review). Don't click — narrative scaffolding.                           |
+| **Design screenshots**        | File upload — **1 to 5** PNG/JPG/WEBP, drag-and-drop or click-to-browse. Multiple files = comparison mode.                  |
+| **Frame labels**              | Optional textbox, one label per line in upload order. Hover the `info` icon for syntax. Missing → filename stem fallback.   |
+| **Context**                   | Free-text notes: audience, brand, goal, market. **Every word here is fed to all five agents** — concrete words win.         |
+| Mode banner                   | One-line italic under Run, shows whether `.env` has real APIs or fakes active. Switch by editing `.env`, not the UI.        |
+| `<details>` "How to upload"   | Collapsed by default. Expand for upload limits + preflight rules. Do NOT pre-expand for judges — the run is the demo.       |
+| **Run analysis** (button)     | Kicks off the LangGraph DAG. Streams status back into the page. Use ONCE per query.                                         |
+| Quickstart prefill markdown   | One-line caption above the Examples row: *"Click the row below to fill the form with a bundled demo screenshot."*           |
+| **Try the bundled sample** row| Auto-fills the form with `src/fakes/fixtures/sample.png` + a "Sample dashboard" label + a default context. **Quickstart only — clear it before running on real designs.** |
+| Status / log surface          | Renders "Ready" → "Analysis running" → "Report ready" inline as the run progresses.                                         |
+| Raw structured report (accordion)| Collapsed accordion below the run button. Expand only if a judge says "show me the raw JSON".                            |
 
 > **Single-frame vs comparison mode (multi-frame)** — the Analyze tab
 > handles both with the same controls. Drop one screenshot for a fast
@@ -154,9 +166,13 @@ read state. Give it 90 seconds of attention.
 
 #### D.2. Exact values to fill
 
-1. **Design screenshot** — drag `~/Desktop/stripe-payments.png` from
+**Single-frame demo (default — use this unless you've practiced multi-frame):**
+
+1. **Design screenshots** — drag `~/Desktop/stripe-payments.png` from
    step C into the upload area. Wait until the file name appears.
-2. **Context** — paste this exact text. It is engineered so each of the
+2. **Frame labels** — leave blank. Filename stem (`stripe-payments`)
+   becomes the label automatically.
+3. **Context** — paste this exact text. It is engineered so each of the
    five specialists has at least one concrete keyword to react to:
 
    ```text
@@ -167,11 +183,28 @@ read state. Give it 90 seconds of attention.
    Market: competing with Adyen, Square, Razorpay, and PayPal Braintree.
    ```
 
-3. **Mode** — already set in `.env` (see pre-flight step 5). The banner
+4. **Mode** — already set in `.env` (see pre-flight step 6). The banner
    under Run shows the active mode; for the live demo prefer **offline
    fakes** (`USE_REAL=false`) unless you've smoke-tested OpenRouter in
    the last 30 min.
-4. Click **Run analysis** once.
+5. Click **Run analysis** once.
+
+**Multi-frame demo (3 screenshots of the same product — only if rehearsed):**
+
+1. **Design screenshots** — drag THREE files in order:
+   `stripe-home.png`, `stripe-pricing.png`, `stripe-checkout.png`.
+   Capture them per step C; same screen size + zoom.
+2. **Frame labels** — paste this in the labels textbox, one per line:
+
+   ```text
+   Home
+   Pricing
+   Checkout
+   ```
+
+3. **Context** — same paragraph as above (works for both modes).
+4. Click **Run analysis** once. The status will read
+   *"Reviewing 3 frames as one product with offline fakes: Home, Pricing, Checkout."*
 
 #### D.3. What you should see
 
@@ -179,26 +212,37 @@ Status messages stream in below the form, in this order:
 
 ```text
 Analysis running
-Reviewing stripe-payments.png with offline fakes.        ← or "real APIs"
+Reviewing stripe-payments with offline fakes.        ← or "real APIs (.env)"
 
 Report ready
-Score: 76.4/100. Open Report.
+Score: 76.4/100 across 1 frame. Tokens used: 22,100 (~$0.0066);
+cache hits: 0. Open Report.
 ```
 
-Each agent also logs to your terminal — point judges at the terminal:
+Each agent also logs to your terminal **AND** to `data/logs/app.log`. Point
+judges at either. The pattern looks like this:
 
 ```text
-visual_analysis: starting
-visual_analysis: returned in 0.12 s
-ux_critique:     starting
-ux_critique:     returned in 0.14 s
+2026-06-14 15:00:19.123 | INFO     | ui.handlers:on_run:148      - RUN START session=a6490c34 frames=1 mode=fake labels=stripe-payments
+2026-06-14 15:00:19.450 | INFO     | src.agents.base:run_with_schema:140 - agent.visual: starting (schema=VisualAnalysis, images=1)
+2026-06-14 15:00:19.612 | INFO     | src.agents.base:run_with_schema:156 - agent.visual: ok (VisualAnalysis)
 ...
-synthesizer:     composed report (overall_score=76.4)
+2026-06-14 15:00:23.842 | INFO     | src.agents.synthesizer:run:316 - synthesizer: wrote design_report_2026-06-14T15-00-23+00-00_4794cd74.json (score=76.4, recs=3, status={...})
+2026-06-14 15:00:23.844 | INFO     | ui.handlers:on_run:189      - RUN END session=a6490c34 run_id=4794cd74 score=76.4 tokens=22100 usd=0.0066
 ```
 
-This is the "visible logger errors" feature — every agent shouts when it
-starts and when it finishes, so a teammate debugging at 2 a.m. can find
-the failing agent in one grep.
+Every run is bracketed by `RUN START` / `RUN END` lines with a shared
+`session=<id>`. To grep one specific run from a long-running log:
+
+```bash
+grep "session=a6490c34" data/logs/app.log
+```
+
+> **If you see `agent.visual: shallow response (palette-only). Retrying once...`**
+> followed by `agent.visual: retry recovered the narrative.` — that's the
+> visual self-heal loop firing. Keep narrating; the retry is invisible to
+> the user and only doubles cost on the broken visual call. (See FAQ §6.5
+> for the full story; mention it only if a judge asks.)
 
 ---
 
@@ -211,27 +255,48 @@ the score appears in the status bar.**
 
 1. **Title** — "Design report" with subtitle "Synthesized from five
    specialist agents." This is the synthesizer's signature.
-2. **Score block** — 44 px green pill. Stripe should land in the **70–82**
+2. **(Sometimes) "Review needed" banner** — a yellow/orange band that
+   only appears when the quality gate flagged content-thin output (e.g.
+   a missing executive summary, an empty visual narrative, a
+   rec without `proof`). The banner shows up to 5 flagged fields with
+   `field` paths like `visual.narrative` or `top_recommendations[*].affected_frames`.
+   Click the **"What does this mean?"** disclosure to read the
+   plain-English explainer (Review needed → Provisional numbers → How
+   to fix). For the Stripe demo with real APIs you should NOT see this
+   banner; if it appears, narrate honestly: *"the gate flagged
+   `visual.narrative` because the model returned a shallow response;
+   the self-heal retry didn't fully recover. The score is provisional,
+   not gospel."* Then keep going — the rest of the report still renders.
+3. **Score block** — 44 px green pill. Stripe should land in the **70–82**
    range. If it's <50 or >95, flag it as suspicious and check the agents
    didn't get a placeholder image.
-3. **Top strengths** — 3–5 bullets. For Stripe, expect things like
+4. **Score rationale** — one paragraph the synthesizer composes
+   explaining where points were lost.
+5. **Score breakdown bars** — five horizontal bars (visual / ux /
+   accessibility / brand / market). Color-coded by score band.
+6. **Per-frame heatmap** — only renders for multi-frame runs. One
+   row per frame label, columns matching the breakdown bars. This is
+   the "comparison mode" payoff — judges see "Pricing scored 65 on
+   accessibility but Checkout scored 40" without reading prose.
+7. **Top strengths** — 3–5 bullets. For Stripe, expect things like
    "consistent indigo→purple gradient", "clear primary CTA", "dense
    social proof above the fold".
-4. **Prioritized recommendations** — 3 cards. Each card has:
+8. **Prioritized recommendations** — 3 cards. Each card has:
+   - **Priority** badge (1–5, 1 is most important).
    - **Title** (one short sentence).
    - **Effort** pill (gold) — values 1 (small fix) to 5 (major rework).
    - **Impact** pill (teal) — values 1 (cosmetic) to 5 (conversion-moving).
-   - **Rationale** sentence.
+   - **Metric lift** chip (grey) — projected outcome, e.g. *"+15% CTR
+     (similar tests)"*. May be `null` (target — set after a/b test).
+   - **Affected frames** chips — only on multi-frame runs.
+   - **Rationale** sentence + **Proof** citation (e.g. `accessibility:1.4.3`).
    The synthesizer ranks by `impact / effort`, so card 1 is the best
    bang-for-buck. Read card 1 aloud word-for-word.
-5. **Visual analysis** — three lines: layout description, hierarchy
-   description, density score (0–100, lower means more whitespace).
-6. **Accessibility** — `Contrast: pass` for Stripe. If you use a
-   different site and contrast fails, that's still a win — say *"the
-   accessibility agent flagged a real WCAG issue, that's the whole point."*
-7. **Market signals** — 3–5 bullets from Tavily/DuckDuckGo about the
-   product category. For Stripe, expect "developer experience", "global
-   payment coverage", "embedded checkout trends".
+9. **Specialist accordions** (collapsed by default — expand only if a
+   judge asks). Five `<details>` blocks: Visual / UX / Accessibility /
+   Brand / Market. The Visual accordion will show *"Layout: <i>not
+   captured</i>"* with a self-heal note if the model returned a
+   palette-only response and the retry didn't recover.
 
 #### E.2. What to say while pointing
 
@@ -251,18 +316,30 @@ either fix or use the offline-fakes fallback.
 
 ### F. Tab 3 — **References** (proof RAG + live web are real, not theatre)
 
-This tab proves the agents aren't hallucinating citations. There are two
-independent sources behind it: a local image RAG index (LanceDB +
-CLIP embeddings) and a live web search (Tavily, falling back to DuckDuckGo).
+This tab proves the agents aren't hallucinating citations. The tab has
+**two stacked sections**:
+
+- **Top section (auto-fills after every run)** — references the brand
+  agent and market agent actually consulted during the most recent
+  Run. Brand thumbnails come from LanceDB (CLIP image RAG); market
+  citations come from the URLs the market agent embedded in its
+  `MarketResearch` output.
+- **Bottom section (ad-hoc search)** — a free-form query box that
+  hits the local CLIP index AND the live web (Tavily, DDG fallback)
+  AND a hand-curated editorial fallback. Always returns *something*
+  useful, even with an empty corpus and no API key.
 
 #### F.1. What's on the tab
 
-| Element                   | What it does                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Search box + Search button| Submits a query to both LanceDB (image RAG) and Tavily/DuckDuckGo (web).                                           |
-| Similar references gallery| Local thumbnails from your reference index. Each tile shows `<id> - <similarity score>` (0.0–1.0, higher = closer).|
-| Reference notes card      | Status text — how many indexed rows, how many local files, which web provider returned the hits.                   |
-| Web references card       | Up to 5 live web hits with title (link), snippet, and provider (Tavily or DuckDuckGo).                             |
+| Element                          | What it does                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **References used in this run** card | Auto-populated. Brand-RAG thumbnails (when corpus is non-empty) + market-agent citations (URLs). Empty after a clean install: *"Empty brand-RAG corpus. Drop a few reference images into data/reference/ and run `make ingest`..."* |
+| Run-references gallery           | Up to 12 thumbnails the brand agent retrieved. Each tile shows `<id> · <similarity>` and (multi-frame runs) `· matched <frame>,<frame>`.|
+| Search box + Search button       | Submits a query to LanceDB (image RAG) AND Tavily/DuckDuckGo (web) AND the editorial fallback.                     |
+| Search-results gallery           | Local thumbnails from your reference index for the typed query. Empty if no local index — that's fine, see below.  |
+| **Similar references** card      | Status text — how many indexed rows, how many local files, which web provider returned the hits.                   |
+| **Web references** card          | Up to 5 live web hits with title (link), snippet, and provider (Tavily or DuckDuckGo).                             |
+| **Editorial fallback** card      | Hand-curated sources (Stripe, Baymard, Refactoring UI, Material 3, etc.). Shown when local OR web came back thin — never let the user stare at a blank tab. |
 
 #### F.2. Exact query for the Stripe demo
 
@@ -288,49 +365,94 @@ Alternative queries depending on the website you analyzed:
 | airbnb.com       | `marketplace search hero photography`            |
 | razorpay.com     | `india fintech payments mobile-first`            |
 
+If a judge asks "show me similar to Stripe", type literally that:
+**`sites similar to stripe`** — the editorial fallback row will surface
+Stripe + Baymard + Material 3 cards even with a fully cold corpus.
+
 #### F.3. What you should see
 
-- **Local gallery**: 4–12 thumbnails. If empty, you skipped `make ingest`
-  in step A. Narrate: *"Local index has zero rows because we haven't
-  ingested on this demo machine — the search path itself works, web
-  results are live."*
-- **Web references card**: 3–5 cards, each one externally clickable. If
-  Tavily is unset, the card header reads "Web references from
-  DuckDuckGo" — that's the open-source fallback, and that's deliberate.
+- **Top section** (after a Run): brand thumbnails + market URL list.
+  If empty, the empty-state copy explains it ("empty brand-RAG corpus" /
+  "off-domain run"); narrate: *"top section auto-fills from the agents'
+  actual retrievals, so an empty section means we haven't ingested
+  references on this machine — that's a one-command fix with `make
+  ingest`."*
+- **Search section gallery**: 4–12 thumbnails when the local CLIP index
+  is populated. If empty, the Status card says *"No local CLIP index
+  yet — searching the live web below."* You haven't broken anything.
+- **Web references card**: 3–5 cards, each externally clickable. If
+  Tavily is unset, header reads "Web references from DuckDuckGo" —
+  that's the open-source fallback, and that's deliberate.
+- **Editorial fallback card**: only renders when local OR web returned
+  thin. Always has 4–6 hand-curated rows so the page never looks dead.
 
 #### F.4. What to say while pointing
 
-> *"The gallery is image RAG over a CLIP-embedded LanceDB store of
-> reference designs we ingested. The card below is live web search via
-> Tavily, with DuckDuckGo as the open-source fallback. Together that's
-> how the brand and market agents get their evidence — they cannot ship a
-> citation that isn't in one of these two lists."*
+> *"The top section auto-fills from this run — these are exactly the
+> references the brand and market agents looked at. The search box
+> below hits three sources in parallel: image RAG over our CLIP-embedded
+> LanceDB store, live web via Tavily with DuckDuckGo as the
+> open-source fallback, and a hand-curated editorial layer that always
+> renders so the tab is never empty. Together that's how the agents
+> get their evidence — they cannot ship a citation that isn't in one
+> of those layers."*
 
 ---
 
 ### G. Tab 4 — **Settings** (deployability + cost story in 30 seconds)
 
 The Settings tab is read-only — it surfaces the runtime configuration so
-judges can verify nothing is hard-coded.
+judges can verify nothing is hard-coded. Every row carries one of three
+**source badges** so reviewers know where to change the value:
+
+- `.env` — edit `.env` and restart.
+- `code` — edit `src/config.py` and restart (advanced).
+- `auto` — computed at boot from disk; not user-editable.
 
 #### G.1. What's on the tab
 
-| Line                       | What it means                                                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Real API key loaded        | `True` if `OPENROUTER_API_KEY` is set in `.env`; `False` otherwise. Live demo with real APIs requires `True`. |
-| USE_REAL in .env           | The default checkbox state on Tab 1. `True` means real-by-default; `False` means fakes-by-default.            |
-| Tavily key loaded          | `True` if `TAVILY_API_KEY` is set; `False` falls back to DuckDuckGo (still works, just rate-limited).         |
-| Local reference images     | Files matching `*.png|*.jpg|*.webp` under `data/reference/`. If 0, run `make ingest` after seeding the dir.    |
-| Indexed reference rows     | Rows in the LanceDB `design_references` table. Should equal "Local reference images" after ingestion.         |
-| Reports                    | Where on disk the JSON reports go (`data/reports/` by default). Useful for sharing with PMs.                  |
+The tab has **three stacked cards**:
+
+**Card 1 — Current configuration** (read-only):
+
+| Row                          | Source | What it means                                                                                                  |
+| ---------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| OPENROUTER_API_KEY loaded    | `.env` | `True` if set; `False` otherwise. Real-API demo requires `True`.                                               |
+| USE_REAL                     | `.env` | `True` = real APIs; `False` = offline fakes.                                                                   |
+| TAVILY_API_KEY loaded        | `.env` | Optional. Enables Tavily live-web search; `False` falls back to DuckDuckGo.                                    |
+| Text model                   | `code` | The default text-only LLM (e.g. `openai/gpt-4o-mini`).                                                         |
+| Vision model                 | `code` | The default multimodal LLM (e.g. `openai/gpt-4o-mini` or `anthropic/claude-3.5-sonnet`).                       |
+| Temperature                  | `code` | Kept low (0.2) for consistent JSON-schema output and high cache hit rate.                                      |
+| Max tokens / call            | `code` | Caps per-call cost. Default 4096.                                                                              |
+| Cache                        | `auto` | `enabled` / `DISABLED`. Shows the count of cached responses on disk.                                           |
+| Local reference images       | `auto` | Files under `data/reference/`. If 0, run `make ingest` after seeding the dir.                                  |
+| Indexed reference rows       | `auto` | Rows in the LanceDB `design_references` table. Should equal "Local reference images" after ingestion.          |
+| Reports directory            | `auto` | Repo-relative path. Each run drops a `design_report_<ts>_<run_id>.json` here.                                  |
+| **App log file**             | `auto` | Repo-relative path to `data/logs/app.log`. Every run appends here. 10 MB rotation, 5 backups. `LOG_TO_FILE=0` disables. |
+
+**Card 2 — Cost telemetry** (auto-refreshes after every run):
+
+- Total tokens
+- Total estimated USD (cumulative across the session)
+- Cache hit count
+- Per-agent breakdown (one row per specialist, showing tokens + USD)
+
+**Card 3 — Tool registry**:
+
+- One row per LangChain `@tool`-decorated callable (web_search, brand_lookup, etc.)
+- Shows the tool name + its docstring summary so reviewers can audit
+  what each agent actually has hands on.
 
 #### G.2. What to say while pointing
 
-> *"Five lines of state: which keys are loaded, how many reference images
-> are indexed, and where reports get written. That's literally the entire
-> deploy contract — one `.env` file. We deploy to Hugging Face Spaces for
-> free; the FAQ documents the budget — under a dollar a day for hackathon
-> traffic."*
+> *"Three cards. Top card is the deploy contract — eleven lines, every
+> one of them tagged `.env`, `code`, or `auto` so a new operator knows
+> where to change it. Middle card is the live cost ledger — it
+> auto-refreshes after every Run, so judges can verify the per-agent
+> token and USD numbers in real time. Bottom card is the tool registry —
+> every LangChain `@tool` we ship, by name. The whole app deploys to
+> Hugging Face Spaces for free; the FAQ documents the budget — under a
+> dollar a day for hackathon traffic."*
 
 ---
 
@@ -350,6 +472,37 @@ proof enough. If a judge insists, point at `src/mcp/server.py` in the
 file tree and at the `tools` list inside it.
 
 ---
+
+### H.5. Report + log retention (for the "what's persisted" question)
+
+Both reports AND logs are **persistent and timestamped — never
+auto-deleted**. The user owns the cleanup.
+
+| Artifact      | Where                                      | Filename pattern                                              | Cleanup                                  |
+| ------------- | ------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------- |
+| JSON report   | `data/reports/`                            | `design_report_<ISO-timestamp>_<run_id>.json` (sortable)      | `make clean-runs`                        |
+| Side-by-side composite | `data/reports/`                   | `_composite_<short-hash>.png` (only on multi-frame runs)      | `make clean-runs`                        |
+| App log       | `data/logs/app.log`                        | Single rolling file, 10 MB rotation, 5 backups                | `make clean-runs`                        |
+| Per-run boundary | inside `data/logs/app.log`              | Two lines per run: `RUN START session=<id> ...` / `RUN END session=<id> ...` | grep by `session=<id>` to slice           |
+| Cache         | `data/cache/`                              | `<hash>.json` per cached LLM response                         | `make clean-runs CLEAN_CACHE=1` (opt-in) |
+
+**No timestamped log files** — the rolling-file approach keeps cross-run
+grep simple and prevents the `data/logs/` directory from filling up
+with hundreds of small files. If you need a per-run log slice, use
+`grep "session=<id>" data/logs/app.log`. Filename for reports is
+ISO-8601 with `:` replaced by `-` (Windows-safe), so a directory
+listing is naturally chronological:
+
+```text
+$ ls -1 data/reports/*.json
+data/reports/design_report_2026-06-14T15-00-19+00-00_4794cd74.json
+data/reports/design_report_2026-06-14T15-04-43+00-00_8de1c022.json
+data/reports/design_report_2026-06-14T15-12-08+00-00_f7a9bd11.json
+```
+
+For a fresh demo: `make clean-runs` wipes reports + logs but **keeps
+the cache** so re-runs are still instant. Add `CLEAN_CACHE=1` to
+opt into a fully cold start.
 
 ### I. Close the demo
 

@@ -132,6 +132,27 @@ def on_run(
 
         n = len(image_paths)
         labels = _resolve_frame_labels(frame_labels_text, image_paths)
+
+        # SESSION MARKER. The on-disk app log is rolling (10 MB rotation)
+        # and shared across all runs in a process. Without an explicit
+        # boundary, grepping the file for "this morning's broken run"
+        # is painful. We write a single highly-greppable line at start
+        # and end of every run so users can do:
+        #     grep -n "RUN START" data/logs/app.log
+        # to slice the log by run, then use the sandwiched lines as the
+        # context for that one analysis. The session id is a short uuid
+        # so it can be cited in a bug report without leaking PII.
+        import uuid as _uuid
+
+        session_id = _uuid.uuid4().hex[:8]
+        log.info(
+            "RUN START session=%s frames=%d mode=%s labels=%s",
+            session_id,
+            n,
+            "real" if use_real else "fake",
+            ",".join(labels),
+        )
+
         if n == 1:
             running_detail = f"Reviewing {labels[0]} with {mode_label}."
         else:
@@ -165,8 +186,27 @@ def on_run(
             report_dict,
             report_dict,
         )
+        log.info(
+            "RUN END session=%s run_id=%s score=%.1f tokens=%d usd=%.4f",
+            session_id,
+            report.run_id,
+            report.overall_score,
+            cost["total_tokens"],
+            cost["estimated_usd"],
+        )
     except Exception as e:
         log.exception("on_run: unexpected failure during analysis")
+        # Best-effort end marker so a failed run still has a clear
+        # boundary in the log. ``session_id`` may not be defined if the
+        # failure was during deps construction; guard it.
+        try:
+            log.warning(
+                "RUN END session=%s status=failed error=%s",
+                locals().get("session_id", "unknown"),
+                type(e).__name__,
+            )
+        except Exception:
+            pass
         title, body = _classify_run_error(e)
         yield (_status_message(title, body), {}, None)
 

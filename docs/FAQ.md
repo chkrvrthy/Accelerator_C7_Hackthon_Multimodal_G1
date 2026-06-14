@@ -342,11 +342,30 @@ tail -f data/logs/app.log | grep -E "WARNING|ERROR"
 
 # Look at the last failed run:
 grep -E "agent\.\w+: failed" data/logs/app.log | tail -5
+
+# Slice the log by run (every Run is bracketed by RUN START/END):
+grep "RUN START" data/logs/app.log              # how many runs in this session?
+grep "session=a6490c34" data/logs/app.log       # everything from one specific run
 ```
 
 The format includes the source file + line number on the file sink
 (stripped from the console for readability), so you can jump straight
 to the offending code from a log line without grepping.
+
+**Reports + logs are persistent and timestamped — never auto-deleted.**
+
+| Artifact            | Pattern                                              | When does it grow?     |
+| ------------------- | ---------------------------------------------------- | ---------------------- |
+| Report JSON         | `data/reports/design_report_<ISO-ts>_<run_id>.json`  | One per Run.           |
+| Composite PNG       | `data/reports/_composite_<hash>.png`                 | Multi-frame Runs only. |
+| App log             | `data/logs/app.log` (rolls at 10 MB, keeps 5 backups)| Every Run appends.     |
+
+To wipe everything before a fresh demo, run **`make clean-runs`** —
+this nukes `data/reports/*` and `data/logs/*` but keeps the response
+cache (re-runs stay instant). Add `CLEAN_CACHE=1` to nuke the cache
+too. We deliberately did NOT make filenames timestamp-only because
+losing the `run_id` would break round-trips with LangSmith trace IDs;
+both end up in the filename so you can correlate easily.
 
 ### 6.5 Why does the Visual agent sometimes return only a palette?
 

@@ -10,7 +10,7 @@ PIP ?= pip
 
 .PHONY: help \
         venv install install-a install-b install-c install-d install-e \
-        fmt lint todos clean diagrams \
+        fmt lint todos clean clean-runs diagrams \
         test test-a test-b test-c test-d test-e test-real cov \
         run-a run-b run-c-visual run-c-brand run-d-ux run-d-a11y run-e-market \
         ui mcp ingest eval demo
@@ -44,6 +44,7 @@ help:
 	@echo "  diagrams           Re-render docs/images/*.png from scripts/render_diagrams.py"
 	@echo "  demo               ingest + run-a + ui (one command)"
 	@echo "  clean              Remove caches and build artifacts"
+	@echo "  clean-runs         Wipe data/reports/* and data/logs/* (fresh demo state)"
 
 # ----- bootstrap ----------------------------------------------------------
 install:
@@ -85,6 +86,21 @@ todos:
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache build dist *.egg-info
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+
+# Wipe the persistent run artifacts (timestamped reports, brand
+# side-by-side composites, the rolling app log). Useful right before a
+# fresh demo so the Settings tab shows zero accumulated state. The
+# response cache is preserved on purpose — that's what makes a re-run
+# feel instant. Pass CLEAN_CACHE=1 to nuke that too.
+clean-runs:
+	@echo "Wiping data/reports/* and data/logs/* ..."
+	@rm -f data/reports/*.json data/reports/_composite_*.png
+	@rm -f data/logs/*.log data/logs/*.log.*
+	@if [ "$(CLEAN_CACHE)" = "1" ]; then \
+	  echo "Also wiping data/cache/* (CLEAN_CACHE=1) ..."; \
+	  rm -rf data/cache/*; \
+	fi
+	@echo "Done. Reports: $$(ls data/reports/ 2>/dev/null | wc -l), logs: $$(ls data/logs/ 2>/dev/null | wc -l)."
 
 # ----- tests --------------------------------------------------------------
 # CROSS = the cross-cutting tests every person also runs locally.
