@@ -180,11 +180,18 @@ make test-c
 
 ## Self-heal loop on shallow responses (read this before tuning the prompt)
 
-`gpt-4o-mini` (the default vision model) rejects strict `json_schema`
-on multi-image runs about 95% of the time. The fallback to
-`json_object` is loose — the model can skip every string field
-because they all default to `""`. The result: a "successful" call
-that returns only `{"palette": [...]}` and an empty narrative.
+`gpt-4o-mini` rejected strict `json_schema` on multi-image runs about
+95% of the time, which is why we switched the project default to
+`openai/gpt-5-mini` in June 2026 (rejection rate <5%). The
+self-heal mechanism still ships because (a) some users override
+`DEFAULT_VISION_MODEL` to a cheaper model like `gpt-5-nano` or
+`gpt-4o-mini` for cost reasons, and (b) any future model with the
+same `json_schema` quirk gets handled automatically.
+
+When a rejection does happen, the fallback to `json_object` is loose
+— the model can skip every string field because they all default to
+`""`. The result: a "successful" call that returns only
+`{"palette": [...]}` and an empty narrative.
 
 The agent self-heals via `_is_shallow_visual` (in
 `src/agents/visual_analysis.py`). If 3+ narrative strings come back

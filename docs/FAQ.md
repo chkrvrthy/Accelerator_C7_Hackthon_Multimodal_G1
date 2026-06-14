@@ -197,20 +197,24 @@ The Gradio app already uses port 7860 (HF default), so no UI code change.
 - [ ] `USE_REAL=1` only when needed (judge demo). Default to fakes during dev.
 - [ ] Cache enabled (`CACHE_DISABLED` unset). One demo run hits cache on
       every replay → free.
-- [ ] Use `openai/gpt-4o-mini` (~$0.15 / 1M input tokens). Switch to
-      `gpt-4o` only for the demo if the difference is visible.
-- [ ] Set `default_max_tokens=1024` for non-synthesizer agents — saves
-      ~30 % on token spend.
+- [ ] Use `openai/gpt-5-mini` (default — $0.25 / $2.00 per 1M tokens).
+      Switch down to `openai/gpt-5-nano` ($0.05 / $0.40) for cost-
+      sensitive deploys; the visual self-heal retry will fire more
+      often, but most runs still finish in one pass.
+- [ ] Set `default_max_tokens=2048` for non-synthesizer agents if you
+      want to save another ~20% on output spend.
 - [ ] Tavily — leave the env var unset until needed. DuckDuckGo is free.
 - [ ] LangSmith — enable only on demo day. Free tier = 5 K traces/month;
       one full demo run uses ~6 traces.
 
-Order-of-magnitude budget for one full demo run end-to-end with real APIs:
+Order-of-magnitude budget for one full demo run end-to-end with real
+APIs at the default `openai/gpt-5-mini`:
 
-- 5 vision-LLM calls × 1.5 K tokens × $0.15/1M ≈ $0.001
-- 1 text synth × 4 K tokens × $0.15/1M ≈ $0.001
-- 5 Tavily queries × $0.005/query ≈ $0.025
-- **Total: ≈ $0.03 / run.** With cache, repeat runs are free.
+- 4 vision-LLM calls × 1.5 K input tok + 700 image tok × $0.25/Mtok ≈ $0.0022
+- 4 vision-LLM calls × ~400 output tok × $2.00/Mtok ≈ $0.0032
+- 1 text synth × 4 K input + 850 output tok ≈ $0.0028
+- 5 Tavily queries × $0.005/query ≈ $0.025 (skip with no key → free DDG)
+- **Total: ≈ $0.03 / run with Tavily, ≈ $0.008 without.** With cache, repeat runs are free.
 
 ---
 
@@ -222,7 +226,7 @@ may be paid SaaS — the table is explicit about which is which.
 | Library / service | Type | License | Cost | Substitute |
 | --- | --- | --- | --- | --- |
 | `openai` (SDK) | OSS lib | Apache-2.0 | Free | — |
-| OpenRouter (the gateway it points at) | Paid SaaS | — | ~$0.15/1M tokens for `gpt-4o-mini` | Self-host vLLM (post-MVP) |
+| OpenRouter (the gateway it points at) | Paid SaaS | — | ~$0.25/1M input + $2.00/1M output for `gpt-5-mini` (default); $0.05/$0.40 for `gpt-5-nano` | Self-host vLLM (post-MVP) |
 | `pydantic`, `pydantic-settings` | OSS | MIT | Free | — |
 | `gradio` | OSS | Apache-2.0 | Free | Streamlit (Apache-2.0) |
 | `langgraph`, `langchain-core` | OSS | MIT | Free | hand-roll asyncio fan-out |
@@ -379,9 +383,12 @@ INFO     agent.visual: retry recovered the narrative.
 
 This is the **visual-agent self-heal** loop kicking in. Background:
 
-1. The default vision model (`openai/gpt-4o-mini`) rejects strict
+1. Older / cheaper vision models (notably `openai/gpt-4o-mini`,
+   `openai/gpt-5-nano`) reject strict
    `response_format={"type":"json_schema", ...}` on multi-image runs
-   about 95 % of the time. You see this in the log as
+   sometimes — `gpt-4o-mini` does it ~95% of the time which is why
+   the project default switched to `openai/gpt-5-mini` in June 2026.
+   You see this in the log as
    `openrouter: json_schema rejected, retrying with json_object`.
 2. In `json_object` fallback the model is free to skip optional
    fields. It often returns a minimal payload like `{"palette":[...]}`
@@ -531,11 +538,11 @@ Each frame is one image charge to the vision LLM. Five frames is the
 hard ceiling enforced by the upload preflight. The synthesizer is
 text-only so its cost stays constant regardless of frame count:
 
-| Frames | Approx. cost on `gpt-4o-mini` |
-| --- | --- |
-| 1 | ≈ $0.0035 |
-| 3 | ≈ $0.010 |
-| 5 (max) | ≈ $0.018 |
+| Frames | Approx. cost on `gpt-5-mini` (default) | On `gpt-5-nano` (cheap) |
+| --- | --- | --- |
+| 1 | ≈ $0.0085 | ≈ $0.002 |
+| 3 | ≈ $0.020 | ≈ $0.005 |
+| 5 (max) | ≈ $0.034 | ≈ $0.008 |
 
 Source: `src/utils/safe_image.MAX_IMAGES_PER_RUN` (the cap),
 `docs/COST_DISCIPLINE.md` (the maths).

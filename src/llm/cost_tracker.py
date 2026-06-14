@@ -40,12 +40,19 @@ log = get_logger(__name__)
 # meaningless "12,400 tokens". Override at runtime via ``set_pricing``.
 _DEFAULT_PRICING_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     # (input, output) per million tokens. Order: cheapest → most expensive.
+    # Source: OpenRouter list prices, June 2026. Effective price after
+    # prompt caching can be 60-80% lower; this dict is for sticker
+    # estimates on the Settings tab, not finance-grade accounting.
+    "openai/gpt-5-nano": (0.05, 0.40),
     "openai/gpt-4o-mini": (0.15, 0.60),
+    "openai/gpt-5-mini": (0.25, 2.00),
+    "anthropic/claude-3.5-haiku": (0.80, 4.00),
+    "openai/gpt-5": (1.25, 10.00),
     "openai/gpt-4o": (2.50, 10.00),
     "anthropic/claude-3.5-sonnet": (3.00, 15.00),
-    "anthropic/claude-3.5-haiku": (0.80, 4.00),
-    # Cheap default if model is unrecognised — picks GPT-4o-mini pricing.
-    "_default": (0.15, 0.60),
+    # Default if model is unrecognised — picks GPT-5 Mini pricing
+    # (matches the project default in ``src/config.py``).
+    "_default": (0.25, 2.00),
 }
 
 

@@ -267,7 +267,7 @@ There are two flavours of run, both produced by the same pipeline:
 > automatically.
 
 > **Why a 5-frame cap?** Each frame is one image charge to the vision
-> LLM (≈$0.005 on `gpt-4o-mini`). Five frames is the sweet spot for a
+> LLM (≈$0.008 on the default `gpt-5-mini`). Five frames is the sweet spot for a
 > full product surface (Landing → Signup → Dashboard → Settings →
 > Checkout) without runaway tokens. For batch review across many
 > independent designs, see [`scripts/run_evals.py`](scripts/run_evals.py).
@@ -439,13 +439,17 @@ to file paths. Every Sprint 1-6 has a real artifact the judges can point at.
 | Local laptop | Hackathon demo target | Zero cost |
 
 Cost-conscious budget for one full demo run with real APIs at the
-default `gpt-4o-mini` model:
+default `openai/gpt-5-mini` model ($0.25 / $2.00 per 1M tokens):
 
 | Frames per run | Approx. cost | Notes |
 |---|---|---|
-| 1 (single-frame) | **≈ $0.0035** | 4 vision calls × 1 image + synthesizer |
-| 3 (typical multi-frame) | **≈ $0.010** | 4 vision calls × 3 images + synthesizer |
-| 5 (max multi-frame) | **≈ $0.018** | hard ceiling enforced by the upload preflight |
+| 1 (single-frame) | **≈ $0.006** | 4 vision calls × 1 image + synthesizer |
+| 3 (typical multi-frame) | **≈ $0.017** | 4 vision calls × 3 images + synthesizer |
+| 5 (max multi-frame) | **≈ $0.030** | hard ceiling enforced by the upload preflight |
+
+Want it cheaper? Set `DEFAULT_VISION_MODEL=openai/gpt-5-nano` in `.env`
+($0.05 / $0.40 per 1M tokens, ~5× cheaper, weaker reasoning so the
+visual self-heal retry fires more often).
 
 Cache turns repeats into free runs (cache key = sha256 of every image
 byte + prompt + schema). Full breakdown in `docs/COST_DISCIPLINE.md`.

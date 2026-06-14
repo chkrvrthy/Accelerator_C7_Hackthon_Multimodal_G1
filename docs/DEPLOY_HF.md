@@ -1,345 +1,404 @@
-# Deploy to Hugging Face Spaces
+# Deploy to Hugging Face Spaces — beginner's guide
 
-> A 5-minute guide to put this project on a free CPU Space. Zero cost
-> in offline-fakes mode; ~$0.03/run with `OPENROUTER_API_KEY` set.
-
-This is the **cheapest way to demo the project publicly**. HF Spaces gives you:
-
-- A persistent URL: `https://huggingface.co/spaces/<user>/<space>`.
-- A free CPU runtime — every specialist agent is LLM-bound (OpenRouter
-  does the heavy lifting), so CPU is fine. No GPU needed.
-- Build logs you can read and a "Restart Space" button you can click.
-- Free SSL, free domain, sleeps after 48 h of no traffic and wakes on
-  the next request (~30 s cold start).
-
-The default offline-fakes mode runs with **zero API keys** and zero
-cost. Add an `OPENROUTER_API_KEY` secret only when you want the real
-five-agent panel.
+> Goal: get this project running on a free public website at
+> `https://huggingface.co/spaces/<your-name>/<your-space>` so anyone
+> with the link can use it. **No prior deployment experience required.**
+> If you can copy and paste, you can finish this in 15 minutes.
 
 ---
 
-## What's already wired up
+## Before you start (one-time setup, ~5 minutes)
 
-We pre-built the Spaces scaffolding. None of the file names below are
-optional — HF reads them by exact name.
+You need three things on your computer. Skip any you already have.
 
-| File | Why it's there |
-| --- | --- |
-| `app.py` (root) | HF auto-runs this. It's a 5-line shim that imports `ui.app:main`. |
-| `requirements.txt` (root) | The single dependency manifest HF reads. Contains the runtime superset only — no dev/test deps. |
-| `README.md` (root) | Frontmatter (`sdk: gradio`, `app_file: app.py`, `sdk_version`) drives the Space build. The rendered body becomes the Space's About page. |
-| `ui/app.py` | The actual Gradio app. **HF-aware** — binds to `0.0.0.0` automatically when `SPACE_ID` is set, falls back to `127.0.0.1` for local dev. No code change needed. |
+### 1. Make a Hugging Face account
 
-If any of those file names drift, HF will silently fail to start the
-app — you'll see "Build error" with no logs. Always look at the
-**Logs** tab first.
+1. Open <https://huggingface.co/join> in your browser.
+2. Sign up with email or GitHub (either works).
+3. Verify your email when they send the link.
+4. Pick a username — that's the `<your-name>` in your future Space URL.
 
----
+### 2. Get a Hugging Face "write token"
 
-## Step 1 — Confirm the README frontmatter
+A token is like a password that only works for one specific thing.
+We need one that's allowed to push code.
 
-Open `README.md` and confirm the **first 11 lines** are this YAML
-frontmatter (already committed):
+1. Make sure you're logged in to Hugging Face.
+2. Go to <https://huggingface.co/settings/tokens>.
+3. Click the **New token** button (top right).
+4. Fill in the form:
+   - **Name**: type `design-suite-deploy` (anything works, this is just a label)
+   - **Type**: click **write** (this is critical — `read` won't work)
+5. Click **Generate token**.
+6. A long string starting with `hf_` will appear — that's your token.
+   **Copy it now.** Hugging Face won't show it to you again. Paste it
+   somewhere safe like a password manager or a temporary text file.
 
-```yaml
----
-title: Multimodal AI Design Analysis Suite
-emoji: ⚡
-colorFrom: blue
-colorTo: purple
-sdk: gradio
-sdk_version: "6.18.0"
-app_file: app.py
-pinned: false
-license: mit
-short_description: Multi-agent design review with image RAG and OpenRouter.
----
-```
+### 3. Confirm you have git
 
-Only those keys matter. Anything else in the YAML is ignored. **Pin
-`sdk_version` to the same major as `gradio>=...,<...` in
-`requirements.txt`** — version skew here is the #1 build failure on
-Spaces. Both are currently pinned to `6.18.0` / `>=6.18.0,<7.0`.
+Open a terminal:
 
----
+- **macOS**: press `Cmd+Space`, type `Terminal`, press Enter.
+- **Linux**: press `Ctrl+Alt+T`.
+- **Windows**: search "Git Bash" in the Start menu (install it from
+  <https://git-scm.com/downloads> if it's not there).
 
-## Step 2 — Create the Space on huggingface.co
-
-1. Visit <https://huggingface.co/new-space>.
-2. **Owner**: your username or org.
-3. **Space name**: anything URL-safe — e.g. `design-analysis-suite`.
-4. **License**: MIT (matches the repo).
-5. **SDK**: choose **Gradio**.
-6. **Hardware**: CPU basic (free) — enough for an LLM-bound app.
-7. **Visibility**: Public is fine for a hackathon submission. Private
-   needs a paid HF subscription.
-8. Click **Create Space**. You'll land on an empty Space's "Files"
-   page — that's your push target.
-
----
-
-## Step 3 — Wire the HF remote and push (two ways)
-
-Hugging Face Spaces are git repos; `git push` is the deploy.
-
-### Option A: One-shot, recommended (Make targets)
-
-We ship two convenience targets. They never write your token to disk
-and redact it from the printed command.
+In the terminal, type and press Enter:
 
 ```bash
-# 1. Generate a write token at https://huggingface.co/settings/tokens
-#    and export it in your shell (do NOT commit it).
-export HF_TOKEN=hf_...
+git --version
+```
 
-# 2. Wire the 'hf' remote (one time per repo):
-make hf-remote HF_USER=<your-user> HF_SPACE=<space-name>
+You should see something like `git version 2.42.0`. If you see "command
+not found", install git from <https://git-scm.com/downloads> and try
+again.
 
-# 3. Push (every time you want to deploy):
+That's all the setup. The rest is on the actual project.
+
+---
+
+## Step 1 — Make sure everything in the repo is good
+
+You should already be inside the project folder. If not, navigate to it:
+
+```bash
+cd /path/to/ai_c7_hackathon
+```
+
+Run this **one-time check** to confirm the three files Hugging Face
+needs are present:
+
+```bash
+ls app.py requirements.txt README.md
+```
+
+You should see all three filenames printed, no "No such file" errors.
+If anything's missing, stop here and ask for help — those files must
+exist or the deploy will fail silently.
+
+> **What does each file do?**
+> - `app.py` — the file Hugging Face runs to start the website. It's
+>   only 5 lines; it imports the real app from `ui/app.py`.
+> - `requirements.txt` — the list of Python libraries the app needs.
+>   Hugging Face installs these automatically.
+> - `README.md` — the project description. The first 11 lines are
+>   special "frontmatter" that tells Hugging Face this is a Gradio app.
+
+---
+
+## Step 2 — Create the Space on the Hugging Face website
+
+This is all in the browser. **You don't run any commands here.**
+
+1. Go to <https://huggingface.co/new-space> in your browser.
+2. Fill in the form:
+
+   | Field | What to type | Why |
+   | --- | --- | --- |
+   | **Owner** | your username | This is the `<your-name>` part of the URL. |
+   | **Space name** | `design-analysis-suite` | Short and URL-safe. Lowercase, no spaces, hyphens are fine. |
+   | **License** | choose **MIT** | Matches the repo's license. |
+   | **Select the Space SDK** | click **Gradio** | Our app is a Gradio app. |
+   | **Hardware** | leave on **CPU basic — Free** | All the heavy work happens at OpenAI/OpenRouter, so a free CPU is plenty. |
+   | **Public/Private** | choose **Public** | (Private requires a paid HF account.) |
+
+3. Click the big **Create Space** button at the bottom.
+4. You'll land on a page that looks empty with a "Files" tab. **Leave
+   this browser tab open** — we'll come back to it.
+
+> **Tip**: write down the URL you just made. It looks like
+> `https://huggingface.co/spaces/<your-name>/design-analysis-suite`.
+> That's where your live app will be in about 10 minutes.
+
+---
+
+## Step 3 — Push your code to the Space
+
+The Space is just an empty git repo right now. We need to upload our
+code into it. The project ships with two Make commands that do this.
+
+In your terminal (still inside the project folder), do these in order:
+
+### 3a. Save the token as an environment variable
+
+Replace `hf_xxx_PUT_YOUR_REAL_TOKEN_HERE` with the actual token you
+copied in "Before you start" step 2:
+
+```bash
+export HF_TOKEN=hf_xxx_PUT_YOUR_REAL_TOKEN_HERE
+```
+
+> **What does `export` do?** It puts the token into your terminal's
+> memory so the next commands can read it without you typing it again.
+> When you close the terminal, the token is forgotten.
+
+### 3b. Tell git where to push (one-time)
+
+Replace `<your-name>` with your Hugging Face username and
+`<space-name>` with what you typed in Step 2 (probably `design-analysis-suite`):
+
+```bash
+make hf-remote HF_USER=<your-name> HF_SPACE=<space-name>
+```
+
+You should see something like:
+
+```text
+Adding 'hf' remote -> https://huggingface.co/spaces/<your-name>/<space-name>
+hf  https://huggingface.co/spaces/<your-name>/<space-name> (fetch)
+hf  https://huggingface.co/spaces/<your-name>/<space-name> (push)
+```
+
+That's the success message.
+
+### 3c. Push the code
+
+```bash
 make hf-push
 ```
 
-`make hf-push` uses the inline-URL technique
-(`https://USER:$HF_TOKEN@huggingface.co/...`) so the token is consumed
-once and never persisted in `.git/config`.
+You should see lines like:
 
-### Option B: Manual git
+```text
+Pushing HEAD -> hf/main ...
+remote: ----
+remote: Hugging Face Spaces upload complete.
+To https://huggingface.co/spaces/<your-name>/<space-name>
+ * [new branch]      HEAD -> main
+```
 
-If you'd rather drive `git` directly:
+That's it — your code is now on Hugging Face. The Space starts
+building immediately. **Switch to your browser tab** with the Space
+open. You'll see a yellow "Building" banner.
+
+---
+
+## Step 4 — Wait for the build (5–8 minutes the first time)
+
+In your browser:
+
+1. Click the **Logs** tab at the top of your Space.
+2. Watch the lines stream by. You're looking for:
+   - **"Installing dependencies..."** — installing Python libraries (~3-5 min).
+   - **"Building the application..."** — packaging up the app (~30 sec).
+   - **"Running on local URL"** — the moment your app is alive.
+3. When you see green text saying the app is running, click the **App**
+   tab. Your live app should appear.
+
+> **Why is the first build slow?** It downloads big Python libraries
+> (PyTorch is ~700 MB by itself). Hugging Face caches them, so every
+> rebuild after this one takes 60–90 seconds, not 5+ minutes.
+
+If the build fails (red text instead of green), see the
+"Common problems" section at the bottom of this guide.
+
+---
+
+## Step 5 — (Optional) Add API keys for "real" mode
+
+By default the app works with NO API keys — it uses fake offline data
+that returns instantly. Good for showing the UI. But the real demo
+shines when it actually calls AI models.
+
+To switch to real mode:
+
+1. In your browser, on your Space's page, click the **Settings** tab
+   (top right, next to "Files" and "Community").
+2. Scroll down to **Repository secrets**. Click **New secret**.
+3. Add the OpenRouter key:
+   - **Name**: `OPENROUTER_API_KEY`
+   - **Value**: paste your OpenRouter key (starts with `sk-or-...`).
+     Get one at <https://openrouter.ai/keys> if you don't have one.
+   - Click **Save**.
+4. *(Optional)* Add Tavily for live web search in the market agent:
+   - Click **New secret** again.
+   - **Name**: `TAVILY_API_KEY`
+   - **Value**: your Tavily key from <https://app.tavily.com/home>.
+   - Click **Save**.
+5. Now scroll up to **Variables** (above the Secrets section). Add a
+   regular variable (not a secret):
+   - Click **New variable**.
+   - **Name**: `USE_REAL`
+   - **Value**: `true`
+   - Click **Save**.
+6. Scroll to the very top of the Settings page and click
+   **Restart this Space**. Wait ~30 seconds for it to come back up.
+
+When the app finishes restarting, open the **Settings tab inside the
+running app** (not the HF settings — the tab at the top of the actual
+Gradio app). You should see:
+
+- `OPENROUTER_API_KEY loaded: True`
+- `USE_REAL: true`
+
+That confirms real mode is on.
+
+---
+
+## Step 6 — Test that everything works
+
+In your browser, on the live Space:
+
+1. **Analyze tab**: click the row that says
+   "Try the bundled sample (one-click prefill)". The form auto-fills.
+2. Click the green **Run analysis** button.
+3. Watch the status messages:
+   - "Analysis running" → "Reviewing sample with offline fakes." (or
+     "real APIs (.env)" if you did Step 5)
+   - "Report ready — Score: X/100..."
+4. Click the **Report tab** at the top. You should see:
+   - A big green score pill (around 70-80 for fakes, 70-85 for real).
+   - "Top strengths" bullet list.
+   - "Prioritized recommendations" cards.
+5. Click the **Settings tab inside the app**. Confirm the configuration
+   card shows the right values.
+
+If any of those steps don't look right, see "Common problems" below.
+
+---
+
+## How to update the app later
+
+After you change code locally:
 
 ```bash
-git remote add hf https://huggingface.co/spaces/<your-user>/<space-name>
-git push hf main
+git add .
+git commit -m "describe what you changed"
+git push origin main      # to GitHub
+make hf-push              # to Hugging Face (rebuilds the Space)
 ```
 
-When prompted for credentials, use:
+The HF rebuild kicks off automatically. Watch the Logs tab. If the
+new build fails, the previous version stays live — your app never
+goes down because of a broken push.
 
-- **Username**: any non-empty string — HF ignores it for token auth.
-- **Password**: your HF write token (`hf_...`).
-
-The Space will start building — watch the **Logs** tab. **First
-builds are slow (~5–8 min)** because PyTorch + open_clip download
-wheels. Subsequent builds use the cache (~90 s).
-
----
-
-## Step 4 — Add secrets (only for real APIs)
-
-Default behavior is offline fakes — works without any keys. To switch
-to the real five-agent panel:
-
-1. Open your Space → **Settings** → **Repository secrets**.
-2. Add **`OPENROUTER_API_KEY`** with your OpenRouter key (`sk-or-...`).
-3. *(Optional)* Add **`TAVILY_API_KEY`** for live web search in the
-   market agent. Without it, the market agent falls back to
-   DuckDuckGo (still works, just rate-limited).
-4. *(Optional)* Add **`LANGSMITH_API_KEY`** to ship traces. Without it,
-   the project's `tracing.py` module installs a no-op tracer.
-5. Now go to **Settings → Variables** (above secrets) and add the
-   non-secret toggle:
-   - `USE_REAL=true` — flips the default mode to real APIs.
-6. Click **Restart Space**.
-
-The Space's **Settings tab** inside the running app will then show
-`OPENROUTER_API_KEY loaded: True` and the cost telemetry card will
-populate after every Run.
+> Make sure `HF_TOKEN` is still in your terminal's memory. If you've
+> opened a fresh terminal, run `export HF_TOKEN=hf_...` again before
+> `make hf-push`.
 
 ---
 
-## Step 5 — Smoke-test the deploy
+## Can the app run BOTH on my laptop AND on Hugging Face?
 
-After the build succeeds:
+**Yes — and that's already how it's wired.** No environment-specific
+code branches. The same `app.py` works in both places because:
 
-1. Open the Space URL.
-2. **Quickstart**: in the Analyze tab, click the
-   "Try the bundled sample (one-click prefill)" row. Form auto-fills.
-3. Click **Run analysis**.
-4. Watch the streaming status block:
-   - `Analysis running` — the orchestrator is fanning out.
-   - `Report ready — Score: X/100 across 1 frame.` — done.
-5. Open the **Report** tab. Verify the score block, breakdown bars,
-   and recommendation cards render. If you see the orange
-   "Review needed" banner, click **"What does this mean?"** for
-   the explainer (an empty narrative on the Visual agent is the most
-   common cause; on free Spaces with `gpt-4o-mini`, the visual
-   self-heal retry usually recovers it).
-6. Open the **References** tab. The top "References used in this run"
-   card will be empty (no `data/reference/` images on the Space yet)
-   — that's expected. Type `fintech payments landing page hero
-   gradient` in the search box, hit Enter; you should see web hits
-   (Tavily or DuckDuckGo) and a hand-curated editorial fallback row.
-7. Open the **Settings** tab. Confirm:
-   - `OPENROUTER_API_KEY loaded: True/False` matches your secrets.
-   - `Indexed reference rows: 0` (the corpus is empty on a fresh Space).
-   - Cost telemetry card shows your per-Run tokens + USD.
+- `ui/app.py` checks for the `SPACE_ID` environment variable that
+  Hugging Face sets automatically. If it's set, the server binds to
+  `0.0.0.0` (so the Space's front-door proxy can reach it).
+- If `SPACE_ID` is not set, the server binds to `127.0.0.1` (localhost
+  only — keeps your app off the LAN by default for privacy).
+- You can override either way with the `GRADIO_SERVER_NAME` env var
+  (useful for Docker containers, CI, etc.).
 
-If the demo is offline (no `OPENROUTER_API_KEY` secret) the app still
-works — every agent uses the deterministic fakes, the score lands at
-~74.5, and you've still proven the full UI works end-to-end.
+So the same workflow works:
 
----
-
-## Step 6 — Seed the brand-RAG corpus (optional)
-
-A fresh Space has zero indexed reference rows. The brand agent and
-References tab will gracefully no-op (the editorial fallback handles
-empty corpus), but the demo looks better with a few thumbnails.
-
-**Two ways to seed:**
-
-### A. Commit reference images (simplest, ~10 MB max)
-
-Drop a handful of public-domain UI screenshots into `data/reference/`
-locally, commit them, push to HF. They'll be re-ingested on the next
-container restart **only if** you also commit the resulting LanceDB
-files in `data/index/` — but those are binary blobs and Git LFS would
-help. For the hackathon, the simpler path is a **boot-time ingest**:
-
-### B. Boot-time ingest hook (recommended)
-
-Add this to a top-of-`app.py` startup block (or rely on the existing
-`ensure_dirs()` if you wire it into your own bootstrap). HF builds the
-container fresh each restart, so this only runs once per container
-lifetime:
-
-```python
-import subprocess, sys
-from pathlib import Path
-from src.config import get_settings
-
-cfg = get_settings()
-if cfg.local_reference_file_count() and cfg.vector_row_count() == 0:
-    subprocess.run(
-        [sys.executable, "-m", "scripts.ingest_references",
-         "--source", str(cfg.reference_dir)],
-        check=False,
-    )
-```
-
-Or just commit the LanceDB index folder (`data/index/`) along with
-the reference images. Both work; the boot-time ingest is more
-hermetic and easier to update.
-
----
-
-## Cost expectations
-
-| Mode | Per-run cost | Notes |
+| Where | Command | Where it runs |
 | --- | --- | --- |
-| Offline fakes (default, no `OPENROUTER_API_KEY`) | **$0** | Returns in <1 s. Demo-grade payload from `src/fakes/`. |
-| Real APIs, single frame (`gpt-4o-mini`) | **~$0.03** | ~25 s end-to-end. ~22 k tokens across 5 agents. |
-| Real APIs, 3 frames | **~$0.05** | ~40 s. Comparison mode shares vision tokens. |
-| Real APIs, 5 frames | **~$0.08** | ~55 s. The 5-frame ceiling is the upload preflight cap. |
-| Stronger vision model (`anthropic/claude-3.5-sonnet`) | **~$0.20/run** | 7× cost vs `gpt-4o-mini`, but the visual self-heal retry rate drops near zero. Set in `.env` via `DEFAULT_MODEL=anthropic/claude-3.5-sonnet`. |
+| Your laptop | `make ui` (or `python ui/app.py`) | <http://127.0.0.1:7860> |
+| Hugging Face Space | `make hf-push` | `https://huggingface.co/spaces/<you>/<space>` |
 
-A community-tier (free) Space sleeps after 48 h of no traffic. The
-first request after sleeping takes ~30 s to wake the container. This
-is normal and costs nothing.
+Both run the **identical code**. Both produce the same UI. Both can
+use real APIs (your laptop reads `.env`; the Space reads its
+"Repository secrets"). The launch banner prints the path to the log
+file in either environment.
 
 ---
 
-## Persistence caveat (important for demos)
+## What does it cost?
 
-Free Spaces have **ephemeral disk**. That means:
-
-- `data/reports/design_report_<ts>_<run_id>.json` files **survive only
-  until the Space restarts**. The runtime cache, app log, and
-  ingested LanceDB rows all live in the same boat.
-- The "App log file" path shown in the Settings tab still works
-  during a single session — you can `tail` it via the Space's
-  built-in **Files** browser if you have the right permissions —
-  but it's gone after a rebuild.
-- This is fine for the demo: the score on screen + JSON-export from
-  the Report tab is the canonical artifact. Long-term retention is
-  the user's responsibility.
-
-If you need persistence (e.g. to keep the LanceDB corpus across
-restarts):
-
-- Upgrade to **Persistent storage** (Settings → Hardware → Add
-  persistent storage, $5/mo for 20 GB).
-- Or move to a paid tier (`a10g-small`, $0.40/h) for both GPU AND
-  persistent disk.
-- Or: keep your reference corpus in a public dataset on HF and
-  pull it at boot via `huggingface_hub`.
-
----
-
-## Common build failures
-
-| Symptom | Likely cause | Fix |
+| Mode | Per analysis | Notes |
 | --- | --- | --- |
-| `ModuleNotFoundError: ui` | App can't find the package | Confirm `app.py` is at the **root** and contains `from ui.app import main`. |
-| Build times out (~10 min) | Torch + open_clip wheels are slow | Wait. Only the first build hits this; rebuilds are cached. |
-| `gradio` version mismatch | YAML `sdk_version` ≠ `requirements.txt` pin | Pin both to the same minor version (`6.18.0`). |
-| Blank page after deploy | Server bound to 127.0.0.1 instead of 0.0.0.0 | Already fixed — `ui/app.py` auto-detects `SPACE_ID`. If a fork removed the detection, restore it. |
-| `OPENROUTER_API_KEY not set` errors at runtime | Secret missing | Set under **Settings → Repository secrets**, then **Restart Space**. |
-| Quota / rate-limit on real-API mode | Free tier on OpenRouter exhausted | Top up, or switch to fakes by removing `USE_REAL=true` variable and restarting. |
-| `agent.visual: shallow response (palette-only)` warning | `gpt-4o-mini` rejected `json_schema` | Expected. The visual self-heal retries once; if it stays shallow the report still renders with `<i>not captured</i>` placeholders. Switch `DEFAULT_MODEL` to `anthropic/claude-3.5-sonnet` if it persists. |
-| App log empty when you `tail` it on the Space | `LOG_TO_FILE` env var not set | Default is on. If a fork set `LOG_TO_FILE=0` for headless workers, remove it. |
+| Offline fakes (no `OPENROUTER_API_KEY`) | **$0** | Returns in <1 s. Demo-grade fixed responses from `src/fakes/`. |
+| Real APIs, single screenshot | **~$0.0085** | Default model is `openai/gpt-5-mini` — $0.25 input / $2.00 output per 1M tokens. ~25 s end-to-end. |
+| Real APIs, 3 screenshots | **~$0.020** | Comparison mode shares vision tokens efficiently. |
+| Real APIs, 5 screenshots | **~$0.034** | The 5-frame ceiling is enforced by the upload preflight. |
+| Cheaper option (`openai/gpt-5-nano`) | **~$0.002** per single-frame | $0.05 input / $0.40 output per 1M tokens. Self-heal retry fires more often, but most runs still succeed in one pass. |
+| Stronger option (`anthropic/claude-3.5-sonnet`) | **~$0.10** per single-frame | $3.00 input / $15.00 output per 1M tokens. Gold-standard vision quality, ~12× the cost. |
+
+Free Spaces sleep after 48 hours of no traffic and wake on the next
+request (~30 s cold start). That's normal and free.
+
+> **Want to switch models?** Two options:
+> 1. In Step 5 above, also add a Variable (not a secret):
+>    - Name: `DEFAULT_VISION_MODEL`, Value: `openai/gpt-5-nano`
+>    - Name: `DEFAULT_TEXT_MODEL`, Value: `openai/gpt-5-nano`
+>    - Restart the Space.
+> 2. Or locally, edit `.env` and set the same two lines, then run
+>    `make ui` — the Settings tab will show the new model name.
 
 ---
 
-## Updating the deployed Space
+## What does the deployed app look like?
 
-```bash
-git commit -am "tweak prompt"
+A working Space serves four tabs in this order:
 
-git push origin main         # GitHub mirror
-make hf-push                 # HF Space (assumes HF_TOKEN exported)
-```
-
-HF rebuilds on every push to its `main` branch. Use the **Logs** tab
-on the Space to watch the build. If the build fails, the previous
-Space version stays live.
-
-For more drastic changes (new dependencies, switching the SDK
-version), trigger a **factory rebuild** from Settings → "Factory
-reboot" so the build cache is invalidated.
-
----
-
-## What the Space looks like end-to-end
-
-A properly deployed Space serves four tabs in order:
-
-1. **Analyze** — single + multi-frame upload (1–5 PNG/JPG/WEBP),
-   frame-labels textbox, free-form context, mode banner reading from
-   `.env` / Spaces secrets, "Try the bundled sample" prefill row.
-2. **Report** — 44 px score pill, optional "Review needed" banner
-   with disclosure, score-rationale paragraph, five breakdown bars,
-   per-frame heatmap (multi-frame only), top strengths, prioritized
-   recommendation cards (priority/effort/impact/metric_lift/proof),
-   five collapsible specialist accordions.
-3. **References** — two stacked sections. Top auto-fills with the
-   brand thumbnails + market URLs the agents actually consulted.
-   Bottom is an ad-hoc search box hitting LanceDB + Tavily/DDG +
+1. **Analyze** — upload 1 to 5 screenshots, type optional context,
+   click Run. Status streams in real time.
+2. **Report** — score, breakdown bars, prioritized recommendations
+   (each with Effort/Impact/Priority badges), and collapsible
+   specialist accordions for visual / UX / accessibility / brand /
+   market.
+3. **References** — top section auto-fills with what the brand and
+   market agents actually consulted on this run; bottom section is a
+   free-form search box that hits LanceDB + live web (Tavily/DDG) +
    editorial fallback in parallel.
-4. **Settings** — three cards. Current configuration (12 rows tagged
-   `.env` / `code` / `auto`), live cost telemetry (auto-refreshes
-   after every Run), tool registry (every LangChain `@tool` we ship).
+4. **Settings** — three cards. Configuration (12 rows tagged `.env`/
+   `code`/`auto`), live cost telemetry (auto-refreshes after every
+   Run), and the tool registry (every LangChain `@tool` we ship).
 
-Plus a launch banner in the Logs tab printing
-`* Logs are tee'd to: /home/user/app/data/logs/app.log`. Every run is
-bracketed by `RUN START session=<id>` / `RUN END session=<id>` lines
-so you can grep the rolling log by session id.
+In the Logs tab you'll see two key lines after every run:
+
+```text
+RUN START session=<id> frames=N mode=fake|real labels=...
+RUN END   session=<id> run_id=<id> score=X.X tokens=N usd=$.$$$$
+```
+
+You can grep the rolling log by session id to slice one run from many.
 
 ---
 
-## Why HF over Vercel / Render / Fly?
+## Common problems and how to fix them
 
-- HF is the only platform on this list that already understands
-  Gradio. No nginx config, no port surgery, no cold-start surgery.
-- Free CPU tier is enough for an LLM-bound app — all the heavy work
-  is upstream of the container.
-- You don't pay for cold-start; community Spaces just take a few
-  seconds to wake on first request.
-- The `huggingface.co/spaces/...` URL is presentation-friendly for
-  hackathon judges (recognizable, no toy-domain feel).
-- Bonus: the Space's About page renders your README, so judges can
-  read the architecture diagram and FAQ without leaving the
-  hosting site.
+| Problem | What to do |
+| --- | --- |
+| **`make hf-push` says "ERROR: HF_TOKEN env var is not set"** | You haven't run `export HF_TOKEN=hf_...` in this terminal yet. Run it again with your real token. |
+| **`make hf-push` says "ERROR: 'hf' remote is not configured"** | You skipped Step 3b. Run `make hf-remote HF_USER=... HF_SPACE=...` first. |
+| **HF Space build log shows `ModuleNotFoundError: ui`** | The `app.py` at the repo root is missing or wrong. Confirm with `ls app.py` and that it contains `from ui.app import main`. |
+| **Build times out at 10 minutes** | First build only — be patient. PyTorch + open_clip wheels take a long time. Re-runs are 90 seconds. |
+| **Space shows a blank page after build "succeeds"** | Server bound to the wrong address. Already fixed — `ui/app.py` auto-detects HF. If a fork removed the detection, the fix is in the `main()` function (3-tier `server_name` resolution). |
+| **App starts but `OPENROUTER_API_KEY` errors when you click Run** | Secret not set. Go to Step 5 above, double-check the spelling of the secret name, then **Restart Space**. |
+| **You see "Cost: $0.00" in the Settings tab but expected non-zero** | You're in offline-fakes mode (no OpenRouter key, or `USE_REAL` not set). That's intentional — fakes are free. Add the key + variable in Step 5 to switch. |
+| **Visual section says "not captured" with a blue note** | The vision model returned a thin response and the self-heal retry didn't fully recover. Re-run, or switch `DEFAULT_VISION_MODEL` to `openai/gpt-5` or `anthropic/claude-3.5-sonnet` (more expensive but stronger vision). |
+| **Quota / rate-limit errors from OpenRouter** | Free OpenRouter tier exhausted. Top up at <https://openrouter.ai/credits>, or remove the `USE_REAL` variable to fall back to fakes. |
+| **References tab is empty after a Run** | No reference images committed. The "Empty brand-RAG corpus" message tells you to add images to `data/reference/` and run `make ingest`. The bottom search panel still works even with empty corpus (editorial fallback). |
+| **Logs tab is unreadable after many runs** | Each run is bracketed by `RUN START session=<id>` / `RUN END session=<id>`. Use the search box in the Logs tab to grep by session id and see one run at a time. |
 
-If you ever outgrow the free tier, **HF "ZeroGPU"** (`a10g-small`)
-is the next step — same `app.py`, you only change the hardware in
-Settings. That's $0.40/h on demand.
+---
+
+## Need to start fresh?
+
+If your Space is in a weird state and you want a clean slate:
+
+1. On your laptop: `make clean-runs` to wipe `data/reports/` and
+   `data/logs/`. Add `CLEAN_CACHE=1` to also nuke the response cache.
+2. Push again with `make hf-push` — Hugging Face replaces everything
+   on push, no need to delete the Space.
+
+If your Space build cache is stuck (rare), in the HF browser tab go
+to **Settings → Factory reboot** to invalidate the build cache.
+
+---
+
+## I'm stuck — where do I get help?
+
+- For build / deploy questions specific to Hugging Face:
+  <https://discuss.huggingface.co/c/spaces/24>.
+- For OpenRouter / model / billing questions:
+  <https://openrouter.ai/docs>.
+- For errors that look like Python tracebacks: copy the **last 30
+  lines of the Logs tab** and ask in our project's discussion channel.
+
+The deploy itself is straightforward — most failures fall into the
+table above. If something doesn't match, the Logs tab on your Space
+is always the source of truth.

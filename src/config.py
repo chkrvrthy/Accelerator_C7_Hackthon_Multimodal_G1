@@ -46,8 +46,25 @@ class Settings(BaseSettings):
     openrouter_site_url: str = Field(default="https://example.com")
 
     # -------- Default models ------------------------------------------------
-    default_vision_model: str = Field(default="openai/gpt-4o-mini")
-    default_text_model: str = Field(default="openai/gpt-4o-mini")
+    # GPT-5 Mini is the project default (set Aug 2025 launch on
+    # OpenRouter; we adopted June 2026 after the visual self-heal data
+    # showed gpt-4o-mini retrying ~95% of multimodal runs).
+    #   * Better instruction-following + structured-output adherence
+    #     than gpt-4o-mini -> visual self-heal almost never fires.
+    #   * Native multimodal (image + text) on the same endpoint.
+    #   * 400K context window so multi-frame runs fit comfortably.
+    #   * $0.25 / $2.00 per M tokens (vs $0.15 / $0.60 for
+    #     gpt-4o-mini) but that headline diff understates the real
+    #     win: fewer retries means fewer doubled visual calls.
+    # Override at runtime by setting DEFAULT_VISION_MODEL or
+    # DEFAULT_TEXT_MODEL in .env / Spaces secrets. Cheaper alternatives:
+    #   - openai/gpt-5-nano        ($0.05 / $0.40, weaker reasoning)
+    #   - openai/gpt-4o-mini       ($0.15 / $0.60, more retries)
+    # Stronger alternatives:
+    #   - anthropic/claude-3.5-sonnet ($3.00 / $15.00, gold-standard vision)
+    #   - openai/gpt-5             ($1.25 / $10.00, full GPT-5)
+    default_vision_model: str = Field(default="openai/gpt-5-mini")
+    default_text_model: str = Field(default="openai/gpt-5-mini")
     # Why 0.2 (NOT the chat default 0.7-1.0):
     #   * Every agent call is a STRUCTURED-OUTPUT call (json_schema mode).
     #   * Higher temperature breaks JSON adherence and inflates eval flake.
@@ -61,7 +78,7 @@ class Settings(BaseSettings):
     # LOGIC: 2048 was tight for the synthesizer when it has to emit a full
     # nested DesignReport. 4096 gives every agent breathing room for a
     # complete structured output even on a chatty model, while still capping
-    # cost predictably (~$0.01 per call on gpt-4o-mini at typical usage).
+    # cost predictably (~$0.01-0.02 per call on gpt-5-mini at typical usage).
     default_max_tokens: int = Field(default=4096)
 
     # -------- Web search ----------------------------------------------------

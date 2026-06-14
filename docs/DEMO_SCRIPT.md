@@ -420,8 +420,8 @@ The tab has **three stacked cards**:
 | OPENROUTER_API_KEY loaded    | `.env` | `True` if set; `False` otherwise. Real-API demo requires `True`.                                               |
 | USE_REAL                     | `.env` | `True` = real APIs; `False` = offline fakes.                                                                   |
 | TAVILY_API_KEY loaded        | `.env` | Optional. Enables Tavily live-web search; `False` falls back to DuckDuckGo.                                    |
-| Text model                   | `code` | The default text-only LLM (e.g. `openai/gpt-4o-mini`).                                                         |
-| Vision model                 | `code` | The default multimodal LLM (e.g. `openai/gpt-4o-mini` or `anthropic/claude-3.5-sonnet`).                       |
+| Text model                   | `code` | The default text-only LLM (`openai/gpt-5-mini`). $0.25 / $2.00 per 1M tokens.                                  |
+| Vision model                 | `code` | The default multimodal LLM (`openai/gpt-5-mini`). Override to `gpt-5-nano` (cheap) or `claude-3.5-sonnet` (strong) via `.env`. |
 | Temperature                  | `code` | Kept low (0.2) for consistent JSON-schema output and high cache hit rate.                                      |
 | Max tokens / call            | `code` | Caps per-call cost. Default 4096.                                                                              |
 | Cache                        | `auto` | `enabled` / `DISABLED`. Shows the count of cached responses on disk.                                           |

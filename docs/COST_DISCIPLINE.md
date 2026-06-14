@@ -10,10 +10,17 @@ This document is the single page to read if you're worried about the bill. Every
 
 | Knob | Value | Why |
 | --- | --- | --- |
-| `default_text_model` | `openai/gpt-4o-mini` | $0.15/Mtok in, $0.60/Mtok out — ~10× cheaper than Sonnet |
-| `default_vision_model` | `openai/gpt-4o-mini` | Vision-capable mini covers the hackathon use case |
+| `default_text_model` | `openai/gpt-5-mini` | $0.25/Mtok in, $2.00/Mtok out — 12× cheaper than Sonnet, fewer self-heal retries than `gpt-4o-mini` |
+| `default_vision_model` | `openai/gpt-5-mini` | Native multimodal, 400K context, strong instruction-following on `json_schema` |
 | `default_temperature` | `0.2` | Low temperature → JSON adherence is reliable AND cache hit-rate is high |
-| `default_max_tokens` | `2,048` | Hard cap per call so a chatty model can't run away |
+| `default_max_tokens` | `4,096` | Hard cap per call so a chatty model can't run away |
+
+> **Cheaper alternative**: switch to `openai/gpt-5-nano` ($0.05/$0.40
+> per Mtok). ~5× cheaper, but weaker reasoning means the visual
+> self-heal retry fires more often, so net cost is closer to 3×
+> cheaper than `gpt-5-mini`. **Stronger alternative**:
+> `anthropic/claude-3.5-sonnet` ($3.00/$15.00 per Mtok) — gold-standard
+> vision quality, ~12× the cost.
 
 Override anything in `.env`. The `OPENROUTER_*` envs flow through `pydantic-settings` into `Settings`; nothing else reads `os.environ`.
 
@@ -62,11 +69,11 @@ The synthesizer takes the 5 specialist outputs as JSON. We dump them with **`jso
 
 ### 2.3 Image tokens (token sink #3)
 
-Images are resized to a max edge of **1,024 px** before sending. At gpt-4o-mini's pricing, that's roughly **700 tokens per image**. Going lower (768 px) would save another 30% but blurs the small text the accessibility agent needs to grade.
+Images are resized to a max edge of **1,024 px** before sending. At GPT-5 Mini's pricing, that's roughly **700 tokens per image**. Going lower (768 px) would save another 30% but blurs the small text the accessibility agent needs to grade.
 
 ### 2.4 Output tokens
 
-`default_max_tokens=2048` is the hard cap per call. In practice every specialist's structured output lands well under that ceiling (typically 200-600 tokens); the synthesizer is the only call that sometimes brushes 1,500 tokens.
+`default_max_tokens=4096` is the hard cap per call. In practice every specialist's structured output lands well under that ceiling (typically 200-600 tokens); the synthesizer is the only call that sometimes brushes 1,500 tokens.
 
 ### 2.5 Pre-tools (the net token saver)
 
@@ -105,29 +112,30 @@ The synthesizer runs a **pure-Python quality gate** on its first output. If a `f
 
 ## 4. Cost math for a typical real-API run
 
-Single screenshot, no cache hits, default models (`gpt-4o-mini`):
+Single screenshot, no cache hits, default model (`openai/gpt-5-mini`,
+$0.25/Mtok input, $2.00/Mtok output):
 
 | Agent | Prompt tok | Output tok | Image tok | USD |
 | --- | --- | --- | --- | --- |
-| visual | 1,160 | 350 | 700 | $0.000489 |
-| ux | 1,220 | 450 | 700 | $0.000558 |
-| accessibility | 1,050 | 350 | 700 | $0.000473 |
-| brand | 1,150 | 300 | 700 | $0.000458 |
-| market | 1,000 | 400 | 0 | $0.000390 |
-| synthesizer | 4,400 | 850 | 0 | $0.001170 |
-| **Total** | | | | **~$0.0035** |
+| visual | 1,160 | 350 | 700 | $0.001165 |
+| ux | 1,220 | 450 | 700 | $0.001380 |
+| accessibility | 1,050 | 350 | 700 | $0.001138 |
+| brand | 1,150 | 300 | 700 | $0.001063 |
+| market | 1,000 | 400 | 0 | $0.001050 |
+| synthesizer | 4,400 | 850 | 0 | $0.002800 |
+| **Total** | | | | **~$0.0085** |
 
-**~⅓ of a cent per analysis at default settings.** With a 50% cache hit rate (a typical demo with one or two images you analyze repeatedly), it's closer to **$0.002**.
+**~0.85 of a cent per analysis at default settings.** With a 50% cache hit rate (a typical demo with one or two images you analyze repeatedly), it's closer to **$0.005**. On the cheaper `gpt-5-nano` ($0.05/$0.40 per Mtok), the same run is **~$0.002**; on `claude-3.5-sonnet`, it's **~$0.10**.
 
 ### Multi-frame: how cost scales with frame count
 
 Comparison-mode runs (2-5 frames) charge each frame as one image part to the four vision agents. Synthesizer cost is constant because it never sees images.
 
-| Frames per run | 4 vision calls (image tok) | Other prompt+output tok | Total |
+| Frames per run | 4 vision calls (image tok) | Other prompt+output tok | Total (`gpt-5-mini`) |
 | --- | --- | --- | --- |
-| 1 | 4 × 700 = 2,800 | ~7,400 | **~$0.0035** |
-| 3 | 4 × 2,100 = 8,400 | ~7,400 | **~$0.010** |
-| 5 (max) | 4 × 3,500 = 14,000 | ~7,400 | **~$0.018** |
+| 1 | 4 × 700 = 2,800 | ~7,400 | **~$0.0085** |
+| 3 | 4 × 2,100 = 8,400 | ~7,400 | **~$0.020** |
+| 5 (max) | 4 × 3,500 = 14,000 | ~7,400 | **~$0.034** |
 
 Why the 5-frame ceiling matters for cost:
 
