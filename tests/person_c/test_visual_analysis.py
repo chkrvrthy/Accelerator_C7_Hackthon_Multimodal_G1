@@ -47,3 +47,86 @@ def test_visual_user_prompt_handles_no_instructions():
     # Representation-agnostic: any "none / no" sentinel for missing instructions
     # works. Locks the *behavior*, not the exact phrase.
     assert "none" in user.lower()
+
+
+def test_is_shallow_visual_detector():
+    """The shallow-response detector flags palette-only payloads
+    while letting through legitimate-but-terse responses."""
+    only_palette = VisualAnalysis(palette=["#0A2540", "#635BFF", "#FFFFFF"])
+    rich = VisualAnalysis(
+        layout="Two-column hero",
+        hierarchy="Headline first",
+        palette=["#0A2540"],
+        typography="geometric sans 700/400",
+        spacing_notes="8 px grid",
+        density_score=35.0,
+        observations=["a", "b", "c", "d", "e"],
+    )
+    assert visual_analysis._is_shallow_visual(only_palette) is True
+    assert visual_analysis._is_shallow_visual(rich) is False
+
+
+def test_visual_run_retries_on_shallow_response(sample_image):
+    """When the LLM returns palette-only, the agent re-prompts once
+    and the corrected response replaces the partial one. This is the
+    self-heal loop for the gpt-4o-mini multi-image bug."""
+    from src.agents.base import AgentDeps
+    from src.fakes.fake_llm import FakeLLM
+    from src.fakes.fake_retriever import FakeRetriever
+    from src.fakes.fake_search import FakeSearch
+
+    class _RecoveringVision:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def analyze(self, *, system, user, images, schema, model=None):
+            self.calls += 1
+            if self.calls == 1:
+                return VisualAnalysis(palette=["#0A2540", "#635BFF", "#FFFFFF"])
+            return VisualAnalysis(
+                layout="Two-column hero (60/40)",
+                hierarchy="Headline leads, then CTA",
+                palette=["#0A2540", "#635BFF", "#FFFFFF"],
+                typography="geometric sans 700/400",
+                spacing_notes="8 px grid; 24 px gutters",
+                density_score=35.0,
+                observations=["o1", "o2", "o3", "o4", "o5"],
+            )
+
+    vision = _RecoveringVision()
+    deps = AgentDeps(
+        llm=FakeLLM(), vision=vision, retriever=FakeRetriever(), search=FakeSearch()
+    )
+    state = GraphState(image_path=str(sample_image), image_paths=[str(sample_image)])
+    out = visual_analysis.run(state, deps)
+    v = out["visual"]
+    assert vision.calls == 2, "the agent must retry exactly once on a shallow response"
+    assert v.layout, "retry should have populated layout"
+    assert len(v.observations) >= 5, "retry should have populated observations"
+
+
+def test_visual_run_keeps_partial_when_retry_also_shallow(sample_image):
+    """When the retry STILL returns a shallow response, we keep the
+    first one. The quality gate then flags it; we do not loop forever
+    or burn unbounded tokens."""
+    from src.agents.base import AgentDeps
+    from src.fakes.fake_llm import FakeLLM
+    from src.fakes.fake_retriever import FakeRetriever
+    from src.fakes.fake_search import FakeSearch
+
+    class _StuckVision:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def analyze(self, *, system, user, images, schema, model=None):
+            self.calls += 1
+            return VisualAnalysis(palette=["#0A2540", "#635BFF", "#FFFFFF"])
+
+    vision = _StuckVision()
+    deps = AgentDeps(
+        llm=FakeLLM(), vision=vision, retriever=FakeRetriever(), search=FakeSearch()
+    )
+    state = GraphState(image_path=str(sample_image), image_paths=[str(sample_image)])
+    out = visual_analysis.run(state, deps)
+    assert vision.calls == 2, "exactly one retry, never more"
+    assert not out["visual"].layout, "stuck-shallow keeps the empty narrative"

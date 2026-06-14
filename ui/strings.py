@@ -75,6 +75,26 @@ def _display_path(p: Any) -> str:
             return str(Path(*parts[-2:]))
         return path.name or "(unset)"
 
+
+def _log_file_display() -> str:
+    """Return the display-safe path of the active log file (or 'disabled').
+
+    Wraps ``src.utils.logger.get_log_file`` so the Settings tab can
+    render the path without importing logger internals. We swallow any
+    import-time errors (the logger module loads ``src.config``, which
+    is already loaded by the time we render Settings, but be paranoid)
+    and degrade to ``"(disabled)"``.
+    """
+    try:
+        from src.utils.logger import get_log_file
+
+        path = get_log_file()
+    except Exception:
+        return "(disabled)"
+    if path is None:
+        return "(disabled)"
+    return _display_path(path)
+
 # --- Hero ----------------------------------------------------------- #
 
 HERO_BAND_HTML = """
@@ -326,5 +346,11 @@ def runtime_config_card_html(
      <code>{html.escape(_display_path(cfg.report_dir))}</code>
      <span class="src-badge auto">auto</span>
      <i>repo-relative; each run drops a JSON report here</i></p>
+  <p><b>App log file</b>:
+     <code>{html.escape(_log_file_display())}</code>
+     <span class="src-badge auto">auto</span>
+     <i>every run also writes here &mdash; tail this file instead of the
+     console (10 MB rotation, keeps 5 backups). Set
+     <code>LOG_TO_FILE=0</code> in .env to disable.</i></p>
 </div>
 """

@@ -169,7 +169,7 @@ footer.bottom button.primary { background: var(--accent); color: #fff; border-co
   <div class="stats">
     <div class="stat"><span class="n">5</span><span class="l">parallel agents</span></div>
     <div class="stat"><span class="n">6 / 6</span><span class="l">sprints covered</span></div>
-    <div class="stat"><span class="n">8</span><span class="l">robustness pillars</span></div>
+    <div class="stat"><span class="n">9</span><span class="l">robustness pillars</span></div>
     <div class="stat"><span class="n">~4s</span><span class="l">end-to-end</span></div>
     <div class="stat"><span class="n">37</span><span class="l">anti-hallucination tests</span></div>
     <div class="stat"><span class="n">5</span><span class="l">person team</span></div>
@@ -300,7 +300,7 @@ flowchart TB
     </pre>
   </div>
 
-  <h3>Seven robustness pillars (beyond the curriculum)</h3>
+  <h3>Nine robustness pillars (beyond the curriculum)</h3>
   <table class="coverage">
     <thead><tr><th>Pillar</th><th>Lives in</th><th>What it prevents</th></tr></thead>
     <tbody>
@@ -311,6 +311,8 @@ flowchart TB
       <tr><td>5. Quality gate + 1-shot retry</td><td><code>src/agents/quality_gate.py</code></td><td>Empty recommendations, score never moving, missing rationales.</td></tr>
       <tr><td>6. Cost tracker + circuit breaker</td><td><code>src/llm/cost_tracker.py</code></td><td>Runaway token spend; cascading failures when the API is down.</td></tr>
       <tr><td>7. Graceful UI banners</td><td><code>ui/handlers.py::_classify_run_error</code></td><td>Python tracebacks reaching the user; auth errors leaking stack frames.</td></tr>
+      <tr><td>8. Visual-agent self-heal</td><td><code>src/agents/visual_analysis.py::_is_shallow_visual</code></td><td>The gpt-4o-mini multi-image bug: <code>json_schema</code> rejected, fallback returns palette-only. One corrective re-prompt recovers the narrative.</td></tr>
+      <tr><td>9. Persistent on-disk app log</td><td><code>src/utils/logger.py</code> &rarr; <code>data/logs/app.log</code></td><td>Users copy-pasting from a rolling console. 10 MB rotation, 5 backups, opt-out via <code>LOG_TO_FILE=0</code>.</td></tr>
     </tbody>
   </table>
 

@@ -26,8 +26,10 @@
    - The Analyze tab shows the active mode under the Run button as
      "_Mode is read from `.env` — currently **real APIs** / **offline fakes**_".
    - The Settings tab confirms `USE_REAL` and `OPENROUTER_API_KEY` are loaded.
-6. Keep a terminal visible with `tail -f` on a fresh log if real APIs are on,
-   so judges can see the LangSmith trace IDs land.
+6. Keep a terminal visible with `tail -f data/logs/app.log` if real APIs
+   are on (the launch banner prints this exact path) so judges can see
+   the LangSmith trace IDs land. Auto-rotates at 10 MB; `LOG_TO_FILE=0`
+   in `.env` disables.
 7. Have `docs/walkthrough.html` open in a second tab as a fallback. If the
    live demo dies, share that tab and narrate from the diagram.
 

@@ -19,18 +19,30 @@ NOT. The `_StdlibCompatLogger` wrapper below pre-interpolates ``%s`` /
 without this we'd see literal "got %s" in the console (the bug Person E
 hit on Windows).
 
+ON-DISK LOG FILE
+----------------
+Every log line is also written to ``<project>/data/logs/app.log`` with
+10 MB rotation (5 backups). Users no longer have to copy from the
+console — the file is the canonical artifact for debugging. Disable
+with ``LOG_TO_FILE=0`` in .env. The active path is exposed via
+``get_log_file()`` so the launch banner and the Settings tab can
+display it without duplicating logic.
+
 OWNER: Person A (already on disk; do not modify casually)
 """
 
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import sys
+from pathlib import Path
 from typing import Any
 
 from src.config import settings
 
 _CONFIGURED = False
+_LOG_FILE_PATH: Path | None = None
 
 try:
     from loguru import logger as _loguru_logger  # type: ignore[import-not-found]
@@ -41,10 +53,36 @@ except ImportError:  # graceful degrade
     _HAS_LOGURU = False
 
 
+def _resolve_log_file() -> Path | None:
+    """Return the log file path if file logging is enabled, else None.
+
+    The path lands at ``<project>/data/logs/app.log``. We re-create the
+    directory defensively in case ``ensure_dirs`` was skipped (e.g. when
+    the user loads ``src.config.settings`` from a tool like the MCP
+    server before the Gradio process gets a chance to bootstrap).
+    """
+    if not getattr(settings, "log_to_file", True):
+        return None
+    log_dir = getattr(settings, "log_dir", None)
+    if log_dir is None:
+        return None
+    log_dir = Path(log_dir)
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Read-only FS, locked path, or permission issue — degrade
+        # silently to console-only logging rather than crashing the
+        # process. Better a missing log file than a crashed app.
+        return None
+    return log_dir / "app.log"
+
+
 def _configure() -> None:
-    global _CONFIGURED
+    global _CONFIGURED, _LOG_FILE_PATH
     if _CONFIGURED:
         return
+
+    file_path = _resolve_log_file()
 
     if _HAS_LOGURU:
         _loguru_logger.remove()
@@ -60,14 +98,74 @@ def _configure() -> None:
                 "<level>{message}</level>"
             ),
         )
+        if file_path is not None:
+            # Rotation: 10 MB per file, keep 5 backups (~50 MB cap).
+            # Tuned so a typical 30-min demo session never wraps. The
+            # file format omits ANSI colors (loguru auto-detects via
+            # the stream type) and includes the exception block for
+            # post-mortems. ``enqueue=True`` keeps the file write off
+            # the request thread so a slow disk never stalls a run.
+            try:
+                _loguru_logger.add(
+                    str(file_path),
+                    level=settings.log_level,
+                    rotation="10 MB",
+                    retention=5,
+                    backtrace=False,
+                    diagnose=False,
+                    enqueue=True,
+                    format=(
+                        "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
+                        "{level: <8} | {name}:{function}:{line} - "
+                        "{message}"
+                    ),
+                )
+                _LOG_FILE_PATH = file_path
+            except (OSError, PermissionError):
+                _LOG_FILE_PATH = None
     else:
-        logging.basicConfig(
-            stream=sys.stderr,
-            level=getattr(logging, settings.log_level.upper(), logging.INFO),
-            format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
+        # stdlib fallback: a RotatingFileHandler mirrors the loguru
+        # behavior so per-slice runners (which may not have loguru
+        # installed) still get the same on-disk artifact.
+        root = logging.getLogger()
+        root.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+        fmt = logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)s - %(message)s",
             datefmt="%H:%M:%S",
         )
+        if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+            sh = logging.StreamHandler(sys.stderr)
+            sh.setFormatter(fmt)
+            root.addHandler(sh)
+        if file_path is not None:
+            try:
+                fh = logging.handlers.RotatingFileHandler(
+                    str(file_path), maxBytes=10 * 1024 * 1024, backupCount=5
+                )
+                fh.setFormatter(
+                    logging.Formatter(
+                        "%(asctime)s.%(msecs)03d | %(levelname)-8s | "
+                        "%(name)s:%(funcName)s:%(lineno)d - %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S",
+                    )
+                )
+                root.addHandler(fh)
+                _LOG_FILE_PATH = file_path
+            except (OSError, PermissionError):
+                _LOG_FILE_PATH = None
+
     _CONFIGURED = True
+
+
+def get_log_file() -> Path | None:
+    """Return the active on-disk log file path (or None if disabled).
+
+    Used by the UI Settings tab to display the path next to the cost
+    ledger, and by the CLI launcher to print the path at startup so
+    users know where to look without copy-pasting from the screen.
+    """
+    _configure()
+    return _LOG_FILE_PATH
 
 
 class _StdlibCompatLogger:

@@ -30,7 +30,7 @@ the judges can point at.
 
 ## Robustness pillars — what we built BEYOND the curriculum
 
-The five layers below are not in the syllabus. They are what turns a
+The ten layers below are not in the syllabus. They are what turns a
 class project into something close to a product. Each is implemented
 today and listed in `docs/ARCHITECTURE.md` with a one-line description.
 
@@ -44,6 +44,8 @@ today and listed in `docs/ARCHITECTURE.md` with a one-line description.
 | Editorial fallback for references | `src/rag/editorial_refs.py` | When both image RAG and web search return empty, a hand-curated list keeps the References tab useful. Tested: `tests/test_editorial_refs.py`. |
 | Graceful error handling | `ui/handlers.py` (`_classify_run_error`) | Every exception from `on_run` is mapped to a user-friendly banner (rate limit, network, API auth, validation). Server log has the full stack; the user never sees a Python traceback. |
 | Multi-frame comparison mode | `src/schemas/outputs.py` (`GraphState.image_paths`, `frame_labels`, `RetrievedRef.matched_frames`, `Recommendation.affected_frames`, `DesignReport.per_frame_scores`) + every vision agent + the synthesizer | 1-5 screenshots of the same product analysed as ONE coherent product. Vision agents see all frames in one call; brand RAG queries every frame and dedupes; synthesizer correlates findings across screens, names affected frames per recommendation, emits a per-frame heatmap. Tested: `tests/person_a/test_graph.py::test_run_graph_multi_frame_with_labels`, `tests/test_schemas.py::test_design_report_carries_frame_labels_field`, `tests/test_safe_image.py::test_preflight_batch_*`. |
+| Visual-agent self-heal on shallow response | `src/agents/visual_analysis.py` (`_is_shallow_visual`) | Detects the gpt-4o-mini multi-image bug (strict `json_schema` rejected, fallback returns palette-only) and re-prompts ONCE with a corrective directive. Cost doubles only on broken runs. Tested: `tests/person_c/test_visual_analysis.py::test_visual_run_retries_on_shallow_response` + `test_visual_run_keeps_partial_when_retry_also_shallow`. |
+| Persistent on-disk app log | `src/utils/logger.py` → `data/logs/app.log` | Every log line is tee'd to disk with 10 MB rotation (5 backups). Path printed at launch + shown in Settings. Users tail a file instead of copy-pasting from the rolling console. `LOG_TO_FILE=0` in `.env` opts out. |
 
 ## What we deliberately did NOT build
 

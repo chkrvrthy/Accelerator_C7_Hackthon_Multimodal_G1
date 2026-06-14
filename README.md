@@ -167,7 +167,7 @@ walkthrough in `docs/walkthrough.html`.
 
 ### What is in the diagram that is not in the curriculum
 
-Five robustness pillars wrap the multi-agent core. They are what turns
+Seven robustness pillars wrap the multi-agent core. They are what turns
 this from a class project into something close to a product:
 
 1. **Image safety gate** (`src/utils/safe_image.py`) — preflight every
@@ -186,8 +186,19 @@ this from a class project into something close to a product:
 5. **Quality gate + 1-shot synthesizer retry** (`src/agents/quality_gate.py`)
    — pure-Python content checks; if a `fail`-severity issue is found
    in the first synthesizer output, ONE corrective re-prompt is sent.
+6. **Visual-agent self-heal** (`src/agents/visual_analysis.py`) —
+   `gpt-4o-mini` rejects strict `json_schema` mode about 95 % of the
+   time on multi-image runs and falls through to plain `json_object`,
+   which often returns a palette-only payload. The agent detects that
+   shallow shape and re-prompts ONCE with a corrective directive
+   ("you forgot layout / hierarchy / typography — re-emit"). Cost
+   doubles only on the broken case; clean runs pay nothing extra.
+7. **Persistent on-disk app log** (`src/utils/logger.py`) — every log
+   line is tee'd to `data/logs/app.log` with 10 MB rotation (5 backups).
+   Users no longer copy from a rolling console; the path is printed at
+   launch and shown in the Settings tab. `LOG_TO_FILE=0` opts out.
 
-All five are implemented today. None of them ship as buzzwords; each
+All seven are implemented today. None of them ship as buzzwords; each
 has a one-page section in `docs/ARCHITECTURE.md`.
 
 ## Quickstart

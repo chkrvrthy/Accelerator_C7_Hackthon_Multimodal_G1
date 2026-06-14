@@ -99,6 +99,18 @@ def visual_analysis_system() -> str:
         - density_score: pick the rubric anchor whose description matches
           what you see; do NOT default to 50.
 
+        FORBIDDEN OUTPUTS (we WILL re-prompt and bill you twice)
+        - Do NOT return a JSON with only the palette field populated.
+          Every string field (layout, hierarchy, typography,
+          spacing_notes) MUST contain a real observation, even when
+          you are unsure — in that case prefix the field with
+          "unsure:" and describe what made it ambiguous (e.g.
+          "unsure: hero image is small at this resolution; appears
+          to occupy the right 40% but image quality is borderline").
+        - Do NOT return an empty observations array. 5-10 entries is
+          the minimum bar — fewer signals shallow effort.
+        - Do NOT default density_score to 0 or 50. Pick from the rubric.
+
         {TONE_HINT}
         {EVIDENCE_RULE}
         {ANTI_HALLUCINATION_RULE}

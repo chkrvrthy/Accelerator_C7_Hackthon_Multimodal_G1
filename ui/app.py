@@ -255,6 +255,17 @@ def main() -> None:
                 gr.HTML(TOOL_REGISTRY_HEADER_HTML)
                 gr.HTML(_tool_registry_html())
 
+    # Surface the on-disk log path in the launch banner so users do not
+    # have to copy from the rolling console — the file is the canonical
+    # debugging artifact. ``get_log_file()`` returns None when file
+    # logging is disabled (LOG_TO_FILE=0) or the path is read-only; we
+    # only print when there is something useful to point at.
+    from src.utils.logger import get_log_file
+
+    log_path = get_log_file()
+    if log_path is not None:
+        print(f"* Logs are tee'd to: {log_path}", file=sys.stderr)
+
     demo.queue().launch(
         server_name="127.0.0.1",
         server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7860")),

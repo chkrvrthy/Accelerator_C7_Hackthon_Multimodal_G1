@@ -177,5 +177,43 @@ make test-c
 - **Palette not validated as hex** — once the validator tightens, hallucinated
   values like "navy" will fail validation and break the whole graph. Catch it
   in your prompt iterations, not at runtime.
+
+## Self-heal loop on shallow responses (read this before tuning the prompt)
+
+`gpt-4o-mini` (the default vision model) rejects strict `json_schema`
+on multi-image runs about 95% of the time. The fallback to
+`json_object` is loose — the model can skip every string field
+because they all default to `""`. The result: a "successful" call
+that returns only `{"palette": [...]}` and an empty narrative.
+
+The agent self-heals via `_is_shallow_visual` (in
+`src/agents/visual_analysis.py`). If 3+ narrative strings come back
+empty AND `observations` is empty, the agent re-prompts ONCE with a
+sharp critique and replaces the partial response if the retry
+recovers. You will see this in the log as:
+
+```
+WARNING agent.visual: shallow response (palette-only).
+        Retrying once with a corrective directive.
+INFO    agent.visual: retry recovered the narrative.
+```
+
+Cost discipline:
+- Clean runs pay nothing extra.
+- Broken runs pay 2× for the visual call only (other agents unaffected).
+- The retry uses the same model — escalating to a stronger one is a
+  config change, not a code path. If the failure rate stays high
+  even after the retry, switch `DEFAULT_VISION_MODEL` to
+  `openai/gpt-4o` or `anthropic/claude-3.5-sonnet` in `src/config.py`.
+
+When you tune `utils/prompts/visual.py`, keep the **FORBIDDEN OUTPUTS**
+section. It is what teaches the model that palette-only is not an
+acceptable response. Removing it brings the failure rate back to ~95%.
+
+Tests that lock this behavior:
+- `test_is_shallow_visual_detector` — pin the detector heuristic.
+- `test_visual_run_retries_on_shallow_response` — the recovery loop.
+- `test_visual_run_keeps_partial_when_retry_also_shallow` — bound the
+  retry budget to exactly one extra call (no infinite loops).
 - **Severity inflation** — every Finding marked `critical` is meaningless.
   Anchor severity to a small rubric in the prompt.

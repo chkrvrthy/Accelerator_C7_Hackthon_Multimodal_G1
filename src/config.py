@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     # -------- App -----------------------------------------------------------
     log_level: str = Field(default="INFO")
     app_env: str = Field(default="dev")
+    # Logs always tee to a file under <project>/data/logs so users (and
+    # judges) never have to copy-paste from the console. The path is
+    # surfaced in the Settings tab and printed at launch. Set
+    # ``LOG_TO_FILE=0`` in .env to opt out (useful in CI / headless
+    # workers where the orchestrator already captures stdout).
+    log_dir: Path = Field(default=PROJECT_ROOT / "data" / "logs")
+    log_to_file: bool = Field(default=True)
 
     # ------------------------------------------------------------------ utils
     def ensure_dirs(self) -> None:
@@ -107,6 +114,7 @@ class Settings(BaseSettings):
             self.reference_dir,
             self.report_dir,
             self.cache_dir,
+            self.log_dir,
         ):
             p.mkdir(parents=True, exist_ok=True)
 

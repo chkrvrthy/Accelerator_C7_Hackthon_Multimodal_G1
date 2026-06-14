@@ -316,6 +316,77 @@ make run-a-graph         # Person A — full graph end-to-end
 Each prints an INFO line per agent and a final JSON dump to stdout. If
 something fails, the ERROR line tells you which agent and why.
 
+### 6.4 Where do the logs actually live? (you do NOT have to copy from the console)
+
+Every log line is also written to **`data/logs/app.log`**. The launch
+banner prints the active path so you can `tail -f` it from another
+terminal:
+
+```
+* Running on local URL: http://127.0.0.1:7860
+* Logs are tee'd to: /path/to/repo/data/logs/app.log
+```
+
+The same path is shown in the **Settings tab** under "App log file" so
+non-CLI users can find it. The file rotates at 10 MB and keeps 5
+backups (`app.log.1` through `app.log.5`) — enough to capture a 30-min
+demo session without wrapping. To opt out (CI, headless workers,
+read-only filesystems), set `LOG_TO_FILE=0` in `.env` and the
+console-only behavior returns.
+
+Two practical loops we use ourselves:
+
+```bash
+# Live tail while you reproduce a bug:
+tail -f data/logs/app.log | grep -E "WARNING|ERROR"
+
+# Look at the last failed run:
+grep -E "agent\.\w+: failed" data/logs/app.log | tail -5
+```
+
+The format includes the source file + line number on the file sink
+(stripped from the console for readability), so you can jump straight
+to the offending code from a log line without grepping.
+
+### 6.5 Why does the Visual agent sometimes return only a palette?
+
+You may notice in the log lines like:
+
+```
+WARNING  agent.visual: shallow response (palette-only).
+         Retrying once with a corrective directive.
+INFO     agent.visual: retry recovered the narrative.
+```
+
+This is the **visual-agent self-heal** loop kicking in. Background:
+
+1. The default vision model (`openai/gpt-4o-mini`) rejects strict
+   `response_format={"type":"json_schema", ...}` on multi-image runs
+   about 95 % of the time. You see this in the log as
+   `openrouter: json_schema rejected, retrying with json_object`.
+2. In `json_object` fallback the model is free to skip optional
+   fields. It often returns a minimal payload like `{"palette":[...]}`
+   and our resilient schema accepts it (every string field defaults
+   to `""`).
+3. The user would see an empty Visual section in the report.
+
+To break that pattern, `src/agents/visual_analysis.py::_is_shallow_visual`
+detects the "palette-only" shape (3+ empty narrative fields AND no
+observations) and re-prompts ONCE with a corrective critique that
+spells out the missing fields. Most of the time the second call lands
+a complete response; if it stays shallow, we keep the partial result
+and the quality gate flags `visual.narrative` as `fail` so the
+"Review needed" banner names the agent explicitly.
+
+**Cost impact.** The retry only doubles cost on broken runs. Clean
+runs (strong model, single frame, lucky dice) pay nothing extra.
+
+**If you see retries every single run.** Switch `DEFAULT_MODEL` (or
+`DEFAULT_VISION_MODEL` in `src/config.py`) to a vision-strong model:
+`openai/gpt-4o`, `anthropic/claude-3.5-sonnet`, or
+`google/gemini-2.0-flash-exp`. Cost goes up ~5-10 ×, but the retry
+fires far less often so amortized cost is closer to 2 × than 10 ×.
+
 ---
 
 ## 7. Why is there an MCP server? Couldn't users just hit the Gradio UI?

@@ -89,9 +89,9 @@ flowchart TB
     MCP -.calls.-> Orchestrator
 ```
 
-## The five robustness layers (what wraps the multi-agent core)
+## The seven robustness layers (what wraps the multi-agent core)
 
-These five are NOT in the curriculum. They are what differentiates this
+These seven are NOT in the curriculum. They are what differentiates this
 from a class project.
 
 | Layer | File | What it does |
@@ -101,6 +101,8 @@ from a class project.
 | Anti-hallucination prompt scaffolding | `src/utils/prompts/_shared.py` | `ANTI_HALLUCINATION_RULE` + `ABSTENTION_RULE` templated into every system prompt; pinned by regression tests |
 | Cost tracker + circuit breaker | `src/llm/cost_tracker.py` | per-run telemetry visible in Settings; fast-fail after 2 hard failures so a typo'd API key cannot burn 25 doomed calls |
 | Quality gate + 1-shot synthesizer retry | `src/agents/quality_gate.py` | pure-Python content checks; if a `fail`-severity issue is found in the first synthesizer output, ONE corrective re-prompt is sent |
+| Visual-agent self-heal on shallow response | `src/agents/visual_analysis.py` | when the vision model rejects strict `json_schema` and the fallback returns a palette-only payload (the gpt-4o-mini multi-image bug), the agent re-prompts ONCE with a corrective critique. Detection lives in `_is_shallow_visual`; one retry doubles visual cost only on broken runs |
+| Persistent on-disk app log | `src/utils/logger.py` | every log line is tee'd to `data/logs/app.log` with 10 MB rotation (5 backups). Path is printed at launch and shown in Settings, so users tail a file instead of copying from the rolling console. `LOG_TO_FILE=0` opts out |
 
 ## Dependency injection seam
 
