@@ -266,8 +266,21 @@ def main() -> None:
     if log_path is not None:
         print(f"* Logs are tee'd to: {log_path}", file=sys.stderr)
 
+    # Server binding precedence (most specific wins):
+    #   1. ``GRADIO_SERVER_NAME`` env var if explicitly set (CI / Docker).
+    #   2. ``0.0.0.0`` if running on Hugging Face Spaces (detected by the
+    #      built-in ``SPACE_ID`` env var). HF requires this so the
+    #      container's process is reachable from the front-door proxy;
+    #      without it the Space shows a blank page.
+    #   3. ``127.0.0.1`` for local dev — keeps the app off the LAN by
+    #      default so a teammate's IDE doesn't accidentally expose the
+    #      port on a hotel network.
+    explicit = os.environ.get("GRADIO_SERVER_NAME")
+    on_spaces = bool(os.environ.get("SPACE_ID"))
+    server_name = explicit or ("0.0.0.0" if on_spaces else "127.0.0.1")
+
     demo.queue().launch(
-        server_name="127.0.0.1",
+        server_name=server_name,
         server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7860")),
         theme=gr.themes.Soft(),
         css=APP_CSS,

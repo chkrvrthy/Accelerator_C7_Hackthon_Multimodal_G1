@@ -13,7 +13,7 @@ PIP ?= pip
         fmt lint todos clean clean-runs diagrams \
         test test-a test-b test-c test-d test-e test-real cov \
         run-a run-b run-c-visual run-c-brand run-d-ux run-d-a11y run-e-market \
-        ui mcp ingest eval demo
+        ui mcp ingest eval demo hf-remote hf-push
 
 help:
 	@echo "Bootstrap"
@@ -45,6 +45,9 @@ help:
 	@echo "  demo               ingest + run-a + ui (one command)"
 	@echo "  clean              Remove caches and build artifacts"
 	@echo "  clean-runs         Wipe data/reports/* and data/logs/* (fresh demo state)"
+	@echo "Hugging Face Spaces"
+	@echo "  hf-remote          Wire up the 'hf' git remote (HF_USER + HF_SPACE required)"
+	@echo "  hf-push            Push current branch to the 'hf' remote (triggers a Space rebuild)"
 
 # ----- bootstrap ----------------------------------------------------------
 install:
@@ -171,3 +174,43 @@ diagrams:
 	$(PY) scripts/render_diagrams.py
 
 demo: ingest run-a ui
+
+# ----- Hugging Face Spaces deploy ----------------------------------------
+# One-time wiring of the HF Spaces remote. Run once after creating the
+# Space on huggingface.co/new-space:
+#   make hf-remote HF_USER=<your-user> HF_SPACE=<space-name>
+hf-remote:
+	@if [ -z "$(HF_USER)" ] || [ -z "$(HF_SPACE)" ]; then \
+	  echo "ERROR: pass HF_USER=<user> HF_SPACE=<space> on the command line."; \
+	  echo "  Example: make hf-remote HF_USER=alice HF_SPACE=design-suite"; \
+	  exit 1; \
+	fi
+	@if git remote get-url hf >/dev/null 2>&1; then \
+	  echo "Updating existing 'hf' remote -> https://huggingface.co/spaces/$(HF_USER)/$(HF_SPACE)"; \
+	  git remote set-url hf "https://huggingface.co/spaces/$(HF_USER)/$(HF_SPACE)"; \
+	else \
+	  echo "Adding 'hf' remote -> https://huggingface.co/spaces/$(HF_USER)/$(HF_SPACE)"; \
+	  git remote add hf "https://huggingface.co/spaces/$(HF_USER)/$(HF_SPACE)"; \
+	fi
+	@git remote -v | grep '^hf'
+
+# Push the current branch to the HF Spaces remote, which triggers a
+# rebuild. Requires that you have already run ``make hf-remote`` once
+# AND that ``HF_TOKEN`` (an HF write token from
+# https://huggingface.co/settings/tokens) is exported in your shell.
+# The token is consumed inline; we never write it to disk or .git/config.
+hf-push:
+	@if [ -z "$(HF_TOKEN)" ]; then \
+	  echo "ERROR: HF_TOKEN env var is not set. Generate a write token at"; \
+	  echo "  https://huggingface.co/settings/tokens"; \
+	  echo "and export it (e.g. 'export HF_TOKEN=hf_...') before running this target."; \
+	  exit 1; \
+	fi
+	@if ! git remote get-url hf >/dev/null 2>&1; then \
+	  echo "ERROR: 'hf' remote is not configured. Run 'make hf-remote HF_USER=... HF_SPACE=...' first."; \
+	  exit 1; \
+	fi
+	@URL=$$(git remote get-url hf); \
+	HOST_PATH=$${URL#https://}; \
+	echo "Pushing HEAD -> hf/main ..."; \
+	git push "https://USER:$(HF_TOKEN)@$$HOST_PATH" HEAD:main 2>&1 | sed "s|$(HF_TOKEN)|***REDACTED***|g"
