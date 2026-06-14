@@ -367,29 +367,22 @@ body {
   gap: 14px;
 }
 
-/* Helper-text below the upload box and the run button.
- * Gradio's default styling renders these as faded italic, which fails
- * contrast and looks disabled. We only pin colour + weight here — no
- * pill, no border, no decoration. Just make the text readable. */
+/* Helper-text below the upload box. Just a small muted line so the
+ * 20 MB / auto-resize policy is visible without dominating the panel. */
 .upload-tip,
-.mode-tip,
 .upload-tip p,
-.mode-tip p,
 .upload-tip em,
-.mode-tip em,
-.upload-tip span,
-.mode-tip span {
-  color: var(--ink) !important;
-  -webkit-text-fill-color: var(--ink) !important;
+.upload-tip span {
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
   font-style: normal !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   font-size: 13px !important;
   line-height: 1.55 !important;
   opacity: 1 !important;
 }
 
-.upload-tip,
-.mode-tip {
+.upload-tip {
   margin: 6px 0 0 !important;
   padding: 0 !important;
   background: transparent !important;
