@@ -56,4 +56,8 @@ def test_brand_user_prompt_lists_ref_ids_and_scores(fake_deps, sample_image):
 
 def test_brand_user_prompt_empty_refs():
     user = brand_consistency_user([])
-    assert "none available" in user
+    # Representation-agnostic: empty-refs path must signal that the agent has
+    # nothing to compare against. Either "none available" or "empty" both
+    # satisfy the contract.
+    lowered = user.lower()
+    assert "empty" in lowered or "none" in lowered

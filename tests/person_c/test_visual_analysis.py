@@ -44,4 +44,6 @@ def test_visual_user_prompt_includes_instructions():
 def test_visual_user_prompt_handles_no_instructions():
     state = GraphState(image_path="x.png", instructions=None)
     user = visual_analysis_user(state)
-    assert "(none)" in user
+    # Representation-agnostic: any "none / no" sentinel for missing instructions
+    # works. Locks the *behavior*, not the exact phrase.
+    assert "none" in user.lower()

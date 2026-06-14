@@ -1050,9 +1050,13 @@ def _format_web_references(query: str, use_real: bool) -> str:
 def on_run(
     image: Any,
     instructions: str,
-    use_real: bool,
 ) -> Generator[tuple[str, dict[str, Any], dict[str, Any] | None], None, None]:
-    """Streaming run handler for Tab 1."""
+    """Streaming run handler for Tab 1.
+
+    The runtime mode (real APIs vs offline fakes) is read from ``.env`` —
+    specifically ``USE_REAL`` and the presence of ``OPENROUTER_API_KEY``.
+    There is no UI override; the Settings tab shows what's loaded.
+    """
     if image is None:
         yield (
             _status_message(
@@ -1066,11 +1070,14 @@ def on_run(
 
     image_path = Path(image.name if hasattr(image, "name") else image)
     _fresh_settings()
+    use_real = _default_real_mode()
+
     if use_real and not _has_openrouter_key():
         yield (
             _status_message(
                 "Missing API key",
-                "Set OPENROUTER_API_KEY in .env and click Run again.",
+                "USE_REAL is on but OPENROUTER_API_KEY is not set in .env. "
+                "Either add the key or set USE_REAL=false in .env.",
             ),
             {},
             None,
@@ -1078,11 +1085,12 @@ def on_run(
         return
 
     deps: AgentDeps = build_default_deps(use_real=use_real)
+    mode_label = "real APIs (.env)" if use_real else "offline fakes"
 
     yield (
         _status_message(
             "Analysis running",
-            f"Reviewing {image_path.name} with {'real APIs' if use_real else 'offline fakes'}.",
+            f"Reviewing {image_path.name} with {mode_label}.",
         ),
         {},
         None,
@@ -1284,21 +1292,20 @@ Upload a screenshot. Add context if useful.
                             placeholder="Audience, brand, market, or goal",
                             lines=3,
                         )
-                        with gr.Row():
-                            use_real_in = gr.Checkbox(
-                                value=_default_real_mode(),
-                                label="Use real APIs from .env",
-                            )
-                            run_btn = gr.Button("Run analysis", variant="primary")
+                        run_btn = gr.Button("Run analysis", variant="primary")
+                        gr.Markdown(
+                            "_Mode is read from `.env` — "
+                            f"currently **{'real APIs' if _default_real_mode() else 'offline fakes'}**. "
+                            "Toggle `USE_REAL` in `.env` to switch._"
+                        )
                         gr.Examples(
                             examples=[
                                 [
                                     "src/fakes/fixtures/sample.png",
                                     "audience: Indian retail banking users; brand: trustworthy, modern, accessible",
-                                    False,
                                 ]
                             ],
-                            inputs=[image_in, instructions_in, use_real_in],
+                            inputs=[image_in, instructions_in],
                             label="Try the bundled sample",
                         )
 
@@ -1328,7 +1335,7 @@ Upload a screenshot. Add context if useful.
                 log_out = gr.HTML(
                     _status_message(
                         "Ready",
-                        "Upload a screenshot. Real mode reads .env.",
+                        "Upload a screenshot. The mode (real APIs vs fakes) is read from .env.",
                     )
                 )
                 with gr.Accordion("Raw structured report", open=False):
@@ -1336,7 +1343,7 @@ Upload a screenshot. Add context if useful.
 
                 run_btn.click(
                     fn=on_run,
-                    inputs=[image_in, instructions_in, use_real_in],
+                    inputs=[image_in, instructions_in],
                     outputs=[log_out, json_out, report_state],
                 )
 

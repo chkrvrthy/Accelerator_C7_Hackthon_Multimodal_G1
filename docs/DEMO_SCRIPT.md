@@ -17,10 +17,15 @@
 3. Open the URL in a clean browser window. Zoom level 100%. Close DevTools.
 4. Pre-stage the bundled sample: in **Analyze**, click "Try the bundled sample"
    so the file picker is already filled. Do **not** click Run yet.
-5. **Decide one** — real APIs or offline fakes:
-   - Real APIs: leave "Use real APIs from .env" checked. ~25 s per run, ~$0.03.
-   - Offline fakes: uncheck it. Returns in <1 s. **Recommended for live demo
-     unless your network and OpenRouter key are both rock solid.**
+5. **Decide mode** — set in `.env`, NOT in the UI (the UI has no toggle).
+   - Real APIs: `USE_REAL=true` and `OPENROUTER_API_KEY=sk-or-...` in `.env`.
+     ~25 s per run, ~$0.03.
+   - Offline fakes: `USE_REAL=false` (or simply omit the flag). Returns in
+     <1 s, $0. **Recommended for live demo unless your network and
+     OpenRouter key are both rock solid.**
+   - The Analyze tab shows the active mode under the Run button as
+     "_Mode is read from `.env` — currently **real APIs** / **offline fakes**_".
+   - The Settings tab confirms `USE_REAL` and `OPENROUTER_API_KEY` are loaded.
 6. Keep a terminal visible with `tail -f` on a fresh log if real APIs are on,
    so judges can see the LangSmith trace IDs land.
 7. Have `docs/walkthrough.html` open in a second tab as a fallback. If the
@@ -130,7 +135,7 @@ read state. Give it 90 seconds of attention.
 | Steps strip           | Visual reminder of the flow (Upload → Add context → Review). Don't click — it's narrative scaffolding.                      |
 | Design screenshot     | File upload. Accepts PNG/JPG/WEBP. Drag-and-drop or click-to-browse.                                                        |
 | Context               | Free-text notes: audience, brand, goal, market. **Every word here is fed to all five agents** — concrete words win.         |
-| Use real APIs         | Toggle. Checked → real OpenRouter calls (~25 s, ~$0.03). Unchecked → offline fakes (<1 s, $0).                              |
+| Mode banner           | Read-only line beneath Run, shows whether `.env` has real APIs or fakes active. Switch by editing `.env`, not the UI.       |
 | Run analysis (button) | Kicks off the LangGraph DAG. Streams status back into the page.                                                             |
 | Try the bundled sample| Auto-fills the form with `src/fakes/fixtures/sample.png`. Useful if real upload fails — do not use for the real demo.       |
 | Good inputs / Output  | Two info cards on the right. They are pure documentation; no interaction.                                                   |
@@ -151,8 +156,10 @@ read state. Give it 90 seconds of attention.
    Market: competing with Adyen, Square, Razorpay, and PayPal Braintree.
    ```
 
-3. **Use real APIs from .env** — uncheck for offline fakes (safer); keep
-   checked only if you've smoke-tested OpenRouter in the last 30 min.
+3. **Mode** — already set in `.env` (see pre-flight step 5). The banner
+   under Run shows the active mode; for the live demo prefer **offline
+   fakes** (`USE_REAL=false`) unless you've smoke-tested OpenRouter in
+   the last 30 min.
 4. Click **Run analysis** once.
 
 #### D.3. What you should see
@@ -504,7 +511,7 @@ order — every item is a thing they can verify in the repo:
 
 | Failure                           | Spoken recovery                                                                                                                                          |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenRouter rate-limit / 429       | "We hit a real-API rate limit — that's why we have offline fakes. Let me flip the toggle." Uncheck "Use real APIs", click Run again, fakes return in 1 s. |
+| OpenRouter rate-limit / 429       | "We hit a real-API rate limit — that's why we have offline fakes." Open `.env`, set `USE_REAL=false`, restart `make ui`, click Run again — fakes return in 1 s. |
 | Gradio fails to load              | "Live demo is down — the architecture is the same; let me walk through `docs/walkthrough.html` instead." Switch to the HTML walkthrough tab.             |
 | LanceDB shows zero indexed rows   | "References live-search needs `make ingest`. The Tavily side still works — let me show that path." Skip local thumbnails, narrate the web-results card.  |
 | Tavily key missing                | "We fall back to DuckDuckGo automatically — no judge sees a blank page." Carry on; the search returns DDG hits.                                          |
