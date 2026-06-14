@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from pathlib import Path
 
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
@@ -67,9 +68,33 @@ from src.schemas.outputs import (
     RetrievedRef,
 )
 from src.utils.logger import get_logger
-from src.utils.prompts import brand_consistency_system
+from src.utils.prompts import brand_consistency_system, brand_consistency_user
 
 log = get_logger(__name__)
+
+
+def _build_images(state: GraphState, refs: list[RetrievedRef], deps: AgentDeps) -> list[Path]:
+    """Return the image list to send to the vision LLM.
+
+    Preferred: a single side-by-side composite (candidate + refs) via Person
+    B's ``image_utils`` — one upload instead of N, ~3x cheaper in tokens.
+    Falls back to sending each image separately if ``image_utils`` is not yet
+    implemented (Person B's slice) or compositing fails for any reason, so
+    Person C's agent works regardless of the other slice's progress.
+    """
+    separate = [Path(state.image_path), *[Path(r.image_path) for r in refs]]
+    try:
+        from src.tools.image_utils import load_image, side_by_side
+
+        imgs = [load_image(p) for p in separate]
+        composite = side_by_side(imgs)
+        deps.cfg.report_dir.mkdir(parents=True, exist_ok=True)
+        composite_path = deps.cfg.report_dir / f"_composite_{uuid.uuid4().hex[:8]}.png"
+        composite.save(composite_path)
+        return [composite_path]
+    except Exception as e:  # NotImplementedError until Person B lands image_utils
+        log.info("brand: composite unavailable (%s); sending images separately", type(e).__name__)
+        return separate
 
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, BrandConsistency | list[RetrievedRef]]:
@@ -89,26 +114,14 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, BrandConsistency | list
         )
         return {"brand": bc, "refs": []}
 
-    user_text = (
-        "Compare the leftmost (candidate) image against the references on the right. "
-        "Score brand consistency. Describe color_drift, type_drift, component_drift "
-        "and cite the retrieved refs verbatim."
-    )
-    # HINT: build a side-by-side composite to reduce token cost (~3x):
-    # TODO(person-c): wire side_by_side once tools.image_utils is real:
-    #   from PIL import Image
-    #   from src.tools.image_utils import load_image, side_by_side
-    #   imgs = [load_image(state.image_path), *[load_image(r.image_path) for r in refs]]
-    #   composite = side_by_side(imgs)
-    #   composite_path = settings.report_dir / f"_composite_{uuid.uuid4().hex[:8]}.png"
-    #   composite.save(composite_path)
-    #   images = [composite_path]
-    # For now we send all images separately (slower, but works).
-    images = [Path(state.image_path), *[Path(r.image_path) for r in refs]]
+    # Send one side-by-side composite when image_utils is available, else fall
+    # back to separate uploads (see _build_images). The user message lists the
+    # retrieved ref ids + scores so the LLM can only cite ids that exist.
+    images = _build_images(state, refs, deps)
     result = run_with_schema(
         agent_name="agent.brand",
         system=brand_consistency_system(),
-        user=user_text,
+        user=brand_consistency_user(refs),
         images=images,
         schema=BrandConsistency,
         deps=deps,

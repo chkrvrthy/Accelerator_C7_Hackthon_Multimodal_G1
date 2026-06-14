@@ -44,10 +44,15 @@ HINTS
 """
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# A palette entry must be a hex color: "#RGB" or "#RRGGBB". Color names like
+# "navy" are dropped so downstream consumers (UI swatches) never choke.
+_HEX_COLOR = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
 
 # --------------------------------------------------------------------------- #
 # Type aliases                                                                #
@@ -103,14 +108,15 @@ class VisualAnalysis(BaseModel):
     density_score: Score = Field(default=0.0, description="0=very sparse, 100=very dense.")
     observations: list[str] = Field(default_factory=list)
 
-    # TODO(person-c): tighten the palette validator to require '#RRGGBB' once
-    #                 prompts are stable. Until then we accept any non-empty
-    #                 string so partial outputs still validate.
     @field_validator("palette")
     @classmethod
     def _strip_blanks(cls, v: list[str]) -> list[str]:
-        # LOGIC: drop empty strings the LLM sometimes emits for "unknown".
-        return [c for c in v if c]
+        # LOGIC: keep only valid hex colors ("#RGB" / "#RRGGBB"). This drops
+        # the empty strings the LLM emits for "unknown" AND hallucinated color
+        # names like "navy". We FILTER rather than raise so a single bad color
+        # never fails validation and breaks the whole graph (prompt iteration,
+        # not a runtime exception, is where hex discipline is enforced).
+        return [c.strip() for c in v if c and _HEX_COLOR.match(c.strip())]
 
 
 class UXCritique(BaseModel):

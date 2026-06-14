@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
 from src.schemas.outputs import GraphState, VisualAnalysis
 from src.utils.logger import get_logger
-from src.utils.prompts import visual_analysis_system
+from src.utils.prompts import visual_analysis_system, visual_analysis_user
 
 if TYPE_CHECKING:  # pragma: no cover
     pass
@@ -82,17 +82,12 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, VisualAnalysis]:
     Returns:
         ``{"visual": VisualAnalysis}`` partial-state dict.
     """
-    user_text = (
-        "Analyze the attached design and emit a VisualAnalysis JSON. "
-        f"User instructions: {state.instructions or '(none)'}."
-    )
-    # HINT: templatize this string in utils.prompts so prompt iteration
-    # happens in one file, not five. The prompt registry is already there.
-    # TODO(person-c): move user_text construction into prompts.visual_analysis_user(state).
+    # Prompt construction lives in utils.prompts so iteration happens in one
+    # file, not scattered across agents (the prompt registry is the seam).
     result = run_with_schema(
         agent_name="agent.visual",
         system=visual_analysis_system(),
-        user=user_text,
+        user=visual_analysis_user(state),
         images=[Path(state.image_path)],
         schema=VisualAnalysis,
         deps=deps,
