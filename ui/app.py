@@ -33,10 +33,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import src.config as app_config  # noqa: E402
 from src.agents.base import AgentDeps, build_default_deps  # noqa: E402
 from src.agents.graph import run_graph  # noqa: E402
-import src.config as app_config  # noqa: E402
-from src.config import Settings, settings  # noqa: E402
+from src.config import (  # noqa: E402, F401  # `settings` is reassigned via `global` in _fresh_settings
+    Settings,
+    settings,
+)
 from src.schemas.outputs import DesignReport  # noqa: E402
 from src.utils.logger import get_logger  # noqa: E402
 
@@ -45,12 +48,16 @@ log = get_logger(__name__)
 APP_CSS = """
 :root {
   color-scheme: light;
-  --surface: #fbfaf6;
-  --ink: #1d2528;
-  --muted: #415054;
-  --soft-text: #2f3b3f;
-  --line: #d9ded8;
+  /* Surfaces */
+  --surface: #f7f7f3;
   --panel: #ffffff;
+  --line: #e2e6dd;
+  --line-strong: #c8d0c4;
+  /* Ink */
+  --ink: #14202a;
+  --muted: #415054;
+  --soft-text: #38474c;
+  /* Brand */
   --teal: #0f766e;
   --teal-dark: #0b5f58;
   --blue: #2563eb;
@@ -58,11 +65,28 @@ APP_CSS = """
   --coral: #d45d4c;
   --coral-dark: #a9473a;
   --gold: #b88718;
-  --navy: #223645;
+  --navy: #1f3142;
+  /* Tints */
   --green-soft: #e7f4ef;
   --coral-soft: #faece8;
   --gold-soft: #f7efd8;
   --blue-soft: #e8f0f7;
+  /* Depth */
+  --shadow-sm: 0 1px 2px rgba(20, 32, 42, 0.05);
+  --shadow-md: 0 6px 18px rgba(20, 32, 42, 0.06), 0 2px 4px rgba(20, 32, 42, 0.04);
+  --shadow-lg: 0 18px 42px rgba(20, 32, 42, 0.08), 0 4px 12px rgba(20, 32, 42, 0.05);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Modern type stack — Inter loaded via head, with safe fallbacks */
+.gradio-container,
+.gradio-container body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Helvetica Neue", Arial, sans-serif !important;
+  font-feature-settings: "cv11" 1, "ss01" 1;
 }
 
 html,
@@ -97,49 +121,108 @@ body {
 .app-shell {
   max-width: 1180px;
   margin: 0 auto;
+  padding: 0 6px;
 }
 
 .hero-band {
+  position: relative;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.10), rgba(212, 93, 76, 0.08)),
-    #fffefa;
-  padding: 28px 30px;
-  margin: 18px 0 18px;
+    radial-gradient(circle at 0% 0%, rgba(15, 118, 110, 0.14) 0%, transparent 38%),
+    radial-gradient(circle at 100% 0%, rgba(212, 93, 76, 0.12) 0%, transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #fbfaf4 100%);
+  padding: 36px 36px 32px;
+  margin: 22px 0;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.hero-band::after {
+  content: "";
+  position: absolute;
+  inset: auto -40px -40px auto;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(15, 118, 110, 0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-band .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+  background: rgba(15, 118, 110, 0.10);
+  padding: 5px 10px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+
+.hero-band .eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
 .hero-band h1 {
-  margin: 0 0 10px;
-  font-size: 34px;
-  line-height: 1.08;
-  letter-spacing: 0;
+  margin: 0 0 12px;
+  font-size: 40px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 800;
   color: var(--ink);
 }
 
 .hero-band p {
-  max-width: 820px;
+  max-width: 760px;
   margin: 0;
-  color: #3f4c50;
-  font-size: 16px;
-  line-height: 1.55;
+  color: var(--soft-text);
+  font-size: 16.5px;
+  line-height: 1.6;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid rgba(15, 118, 110, 0.24);
   background: #ffffff;
   border-radius: 999px;
-  color: #24504c;
-  font-size: 13px;
-  font-weight: 650;
-  padding: 7px 11px;
+  color: var(--teal-dark);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 7px 13px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
 }
 
 .guide-card,
@@ -148,9 +231,15 @@ body {
 .settings-card,
 .reference-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--panel);
-  padding: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 200ms var(--ease), transform 200ms var(--ease);
+}
+
+.guide-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .guide-card h3,
@@ -158,9 +247,10 @@ body {
 .status-card h3,
 .settings-card h3,
 .reference-card h3 {
-  margin: 0 0 8px;
-  font-size: 17px;
-  letter-spacing: 0;
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
   color: var(--ink) !important;
 }
 
@@ -174,7 +264,19 @@ body {
 .reference-card p,
 .reference-card li {
   color: var(--soft-text);
-  line-height: 1.5;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.guide-card ul,
+.result-card ul,
+.reference-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.guide-card li {
+  margin-bottom: 6px;
 }
 
 .settings-card b,
@@ -191,28 +293,59 @@ body {
 .steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 16px 0 8px;
+  gap: 14px;
+  margin: 14px 0 22px;
 }
 
 .step {
-  border-radius: 8px;
-  border: 1px solid #cdd6cf;
-  background: #fffefb;
-  padding: 14px;
-  box-shadow: 0 1px 0 rgba(29, 37, 40, 0.04);
+  position: relative;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: #ffffff;
+  padding: 18px 18px 18px 56px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease),
+              border-color 200ms var(--ease);
 }
+
+.step:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.step::before {
+  content: attr(data-step);
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--teal);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14);
+}
+
+.step.accent-coral::before { background: var(--coral); box-shadow: 0 0 0 4px rgba(212, 93, 76, 0.14); }
+.step.accent-gold::before  { background: var(--gold);  box-shadow: 0 0 0 4px rgba(184, 135, 24, 0.16); }
 
 .step b {
   display: block;
   color: var(--ink);
-  margin-bottom: 5px;
+  font-size: 14.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
 }
 
 .step span {
   color: var(--soft-text);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .accent-teal { border-left: 4px solid var(--teal); }
@@ -376,59 +509,158 @@ body {
   -webkit-text-fill-color: var(--ink) !important;
 }
 
+.report-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+}
+
 .report-wrap h2 {
-  margin: 0 0 12px;
-  font-size: 22px;
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.report-wrap .report-subtitle {
+  margin: 0 0 22px;
+  color: var(--soft-text) !important;
+  font-size: 14px;
 }
 
 .report-wrap h3 {
-  margin: 22px 0 8px;
-  font-size: 16px;
+  margin: 28px 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+
+.report-wrap h3::after {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 2px;
+  background: var(--teal);
+  margin-top: 6px;
+  border-radius: 2px;
 }
 
 .report-wrap ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 0;
+  list-style: none;
 }
 
-.report-wrap li {
+.report-wrap ul li {
   color: var(--soft-text) !important;
   -webkit-text-fill-color: var(--soft-text) !important;
-  line-height: 1.55;
-  margin-bottom: 7px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  padding-left: 22px;
+  position: relative;
+}
+
+.report-wrap ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal);
+  opacity: 0.45;
+}
+
+/* Recommendation cards (nested ul .rec-list) */
+.report-wrap .rec-list {
+  display: grid;
+  gap: 12px;
+}
+
+.report-wrap .rec-list li {
+  background: #fbfaf6;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px 18px 16px 18px;
+  margin-bottom: 0;
+  list-style: none;
+}
+
+.report-wrap .rec-list li::before {
+  display: none;
+}
+
+.report-wrap .rec-list b {
+  display: block;
+  color: var(--ink) !important;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
 .report-score {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: var(--green-soft);
+  gap: 8px;
+  padding: 18px 24px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #ecfaf3 0%, #d6f0e2 100%);
   border: 1px solid #bedccd;
-  font-weight: 750;
+  font-weight: 800;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 12px;
 }
 
 .report-score,
 .report-score * {
-  color: #0b5f58 !important;
-  -webkit-text-fill-color: #0b5f58 !important;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
 }
 
-.report-score span {
-  font-size: 30px;
+.report-score span.report-score-value {
+  font-size: 44px;
   line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+
+.report-score span.report-score-suffix {
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.7;
 }
 
 .report-tag {
-  display: inline-block;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 10px;
   border-radius: 999px;
   background: #eef2f7;
   border: 1px solid #cdd6e0;
   margin-right: 6px;
+  color: var(--navy) !important;
+}
+
+.report-tag.tag-effort {
+  background: var(--gold-soft);
+  border-color: rgba(184, 135, 24, 0.36);
+  color: #6a4e0a !important;
+}
+
+.report-tag.tag-impact {
+  background: var(--green-soft);
+  border-color: rgba(15, 118, 110, 0.36);
+  color: var(--teal-dark) !important;
 }
 
 .json-holder {
@@ -679,6 +911,9 @@ FORCE_LIGHT_THEME_JS = """
 """
 
 FORCE_LIGHT_THEME_HEAD = """
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
   document.documentElement.classList.remove("dark");
   document.documentElement.classList.add("light");
@@ -718,16 +953,13 @@ def _fresh_settings() -> Settings:
     for module_name in modules:
         module = sys.modules.get(module_name)
         if module is not None:
-            setattr(module, "settings", settings)
+            module.settings = settings
     return settings
 
 
 def _has_openrouter_key() -> bool:
     cfg = _fresh_settings()
-    return bool(
-        cfg.openrouter_api_key
-        and "REPLACE_ME" not in cfg.openrouter_api_key
-    )
+    return bool(cfg.openrouter_api_key and "REPLACE_ME" not in cfg.openrouter_api_key)
 
 
 def _default_real_mode() -> bool:
@@ -801,7 +1033,7 @@ def _format_web_references(query: str, use_real: bool) -> str:
 
     rows = "\n".join(
         "<li>"
-        f"<a href=\"{html.escape(hit.url)}\" target=\"_blank\">"
+        f'<a href="{html.escape(hit.url)}" target="_blank">'
         f"{html.escape(hit.title)}</a>"
         f"<br><span>{html.escape(hit.snippet[:180])}</span>"
         "</li>"
@@ -890,20 +1122,27 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
     parts: list[str] = [
         '<div class="report-wrap">',
         "<h2>Design report</h2>",
-        f'<div class="report-score"><span>{report.overall_score:.1f}</span> / 100</div>',
+        '<p class="report-subtitle">Synthesized from five specialist agents.</p>',
+        (
+            '<div class="report-score">'
+            f'<span class="report-score-value">{report.overall_score:.1f}</span>'
+            '<span class="report-score-suffix">/ 100 overall</span>'
+            "</div>"
+        ),
         "<h3>Top strengths</h3>",
         _ul([e(s) for s in report.top_strengths] or ["No strengths returned yet."]),
         "<h3>Prioritized recommendations</h3>",
     ]
     if report.top_recommendations:
         recs = [
-            f"<b>{e(r.title)}</b><br>"
-            f'<span class="report-tag">Effort {e(str(r.effort))}</span>'
-            f'<span class="report-tag">Impact {e(str(r.impact))}</span><br>'
-            f"{e(r.rationale)}"
+            f"<b>{e(r.title)}</b>"
+            f'<span class="report-tag tag-effort">Effort {e(str(r.effort))}</span>'
+            f'<span class="report-tag tag-impact">Impact {e(str(r.impact))}</span>'
+            f"<br>{e(r.rationale)}"
             for r in report.top_recommendations
         ]
-        parts.append(_ul(recs))
+        rec_items = "".join(f"<li>{r}</li>" for r in recs)
+        parts.append(f'<ul class="rec-list">{rec_items}</ul>')
     else:
         parts.append(_ul(["No recommendations returned yet."]))
 
@@ -946,12 +1185,15 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
     """Search local image refs (LanceDB) and live web refs (Tavily/DuckDuckGo)."""
     _fresh_settings()
     if not query.strip():
-        return [], """
+        return (
+            [],
+            """
 <div class="reference-card">
   <h3>Similar references</h3>
   <p>Type a pattern or product category.</p>
 </div>
-"""
+""",
+        )
 
     gallery_items: list[tuple[str, str]] = []
     local_files = _local_reference_file_count()
@@ -971,13 +1213,16 @@ def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
     )
 
     web_refs = _format_web_references(query, use_real=True)
-    return gallery_items, f"""
+    return (
+        gallery_items,
+        f"""
 <div class="reference-card">
   <h3>Similar references</h3>
   <p>{html.escape(status)}</p>
 </div>
 {web_refs}
-"""
+""",
+    )
 
 
 def main() -> None:
@@ -994,14 +1239,17 @@ def main() -> None:
         gr.HTML(
             """
 <section class="hero-band">
+  <span class="eyebrow">Multimodal review</span>
   <h1>Design Analysis Suite</h1>
   <p>
     Upload a screen for a fast visual, UX, accessibility, brand, and market review.
+    Five specialist agents critique in parallel and ship a single prioritized report.
   </p>
   <div class="chip-row">
     <span class="chip">Visual</span>
     <span class="chip">UX</span>
     <span class="chip">Accessibility</span>
+    <span class="chip">Brand</span>
     <span class="chip">Market</span>
   </div>
 </section>
@@ -1011,9 +1259,9 @@ def main() -> None:
         gr.HTML(
             """
 <div class="steps">
-  <div class="step accent-teal"><b>1. Upload</b><span>Use a clear PNG or JPG.</span></div>
-  <div class="step accent-coral"><b>2. Add context</b><span>Audience, brand, goal.</span></div>
-  <div class="step accent-gold"><b>3. Review</b><span>Score, fixes, and evidence.</span></div>
+  <div class="step accent-teal"  data-step="1"><b>Upload</b><span>A clear PNG or JPG of the screen you want reviewed.</span></div>
+  <div class="step accent-coral" data-step="2"><b>Add context</b><span>Audience, brand voice, market &mdash; helps every agent.</span></div>
+  <div class="step accent-gold"  data-step="3"><b>Review</b><span>Score, prioritized fixes, and per-specialist evidence.</span></div>
 </div>
 """
         )
@@ -1094,9 +1342,7 @@ Upload a screenshot. Add context if useful.
 
             with gr.Tab("Report"):
                 report_view = gr.HTML(render_report(None))
-                report_state.change(
-                    fn=render_report, inputs=[report_state], outputs=[report_view]
-                )
+                report_state.change(fn=render_report, inputs=[report_state], outputs=[report_view])
 
             with gr.Tab("References"):
                 gr.HTML(
