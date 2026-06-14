@@ -40,6 +40,7 @@ DO NOT
   in one code path, do it in *all* paths or scores drift between
   ingest-time and query-time.
 """
+
 from __future__ import annotations
 
 import base64
@@ -51,7 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from PIL import Image as _Image  # type: ignore[import-not-found]
 
 
-def load_image(path: Path | str) -> "_Image.Image":
+def load_image(path: Path | str) -> _Image.Image:
     """Open ``path`` and convert to RGB.
 
     Raises:
@@ -71,7 +72,7 @@ def load_image(path: Path | str) -> "_Image.Image":
     return ImageOps.exif_transpose(img).convert("RGB")
 
 
-def resize_max_side(img: "_Image.Image", max_side: int = 1024) -> "_Image.Image":
+def resize_max_side(img: _Image.Image, max_side: int = 1024) -> _Image.Image:
     """Resize so the longest side is ``max_side`` px, preserving aspect ratio.
 
     Returns the input unchanged when it is already smaller than ``max_side``.
@@ -96,7 +97,7 @@ def resize_max_side(img: "_Image.Image", max_side: int = 1024) -> "_Image.Image"
     return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
 
-def to_data_url(img: "_Image.Image", fmt: str = "PNG") -> str:
+def to_data_url(img: _Image.Image, fmt: str = "PNG") -> str:
     """PIL Image → ``data:image/<fmt>;base64,...`` data URI.
 
     Used by ``llm.multimodal.encode_image_to_data_url`` and tests.
@@ -117,10 +118,10 @@ def to_data_url(img: "_Image.Image", fmt: str = "PNG") -> str:
 
 
 def side_by_side(
-    images: list["_Image.Image"],
+    images: list[_Image.Image],
     gap: int = 8,
     bg: tuple[int, int, int] = (255, 255, 255),
-) -> "_Image.Image":
+) -> _Image.Image:
     """Composite N images horizontally with a gap.
 
     Used by the brand agent to send ONE composite (candidate + retrieved
@@ -148,9 +149,7 @@ def side_by_side(
     if not images:
         raise ValueError("side_by_side: empty list")
     target_h = min(im.height for im in images)
-    resized = [
-        im.resize((int(im.width * target_h / im.height), target_h)) for im in images
-    ]
+    resized = [im.resize((int(im.width * target_h / im.height), target_h)) for im in images]
     total_w = sum(im.width for im in resized) + gap * (len(resized) - 1)
     canvas = Image.new("RGB", (total_w, target_h), bg)
     x = 0
@@ -160,7 +159,7 @@ def side_by_side(
     return canvas
 
 
-def annotate_box(img: "_Image.Image", box: tuple[int, int, int, int], label: str) -> "_Image.Image":
+def annotate_box(img: _Image.Image, box: tuple[int, int, int, int], label: str) -> _Image.Image:
     """Draw a labeled rectangle on a copy of ``img``. Used by the report tab.
 
     Returns a NEW image — never mutate the input.
@@ -182,7 +181,7 @@ def annotate_box(img: "_Image.Image", box: tuple[int, int, int, int], label: str
     return out
 
 
-def thumbnail(path: Path | str, size: tuple[int, int] = (256, 256)) -> "_Image.Image":
+def thumbnail(path: Path | str, size: tuple[int, int] = (256, 256)) -> _Image.Image:
     """Cheap thumbnail for the Gradio gallery."""
     # HINT: three lines:
     #   img = load_image(path)

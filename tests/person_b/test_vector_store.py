@@ -1,4 +1,5 @@
 """LanceDB upsert + query against a tmp directory (Person B owns the body)."""
+
 from __future__ import annotations
 
 import pytest

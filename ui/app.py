@@ -1,4 +1,25 @@
-"""Gradio UI for the Multimodal AI Design Analysis Suite."""
+"""Gradio UI for the Multimodal AI Design Analysis Suite.
+
+OWNER: Person E
+SPRINT CONCEPTS: Sprint 4 — Gradio app surface for the multi-agent pipeline.
+CONSUMES: ``agents.graph.run_graph``, ``agents.base.build_default_deps``,
+          ``schemas.outputs.DesignReport``.
+PROVIDES: a Gradio Blocks app on ``http://127.0.0.1:7860`` with three tabs:
+          (1) full DesignReport JSON, (2) per-agent collapsibles, (3)
+          retrieved reference matches.
+
+WHY THIS FILE LIVES OUTSIDE ``src/``
+------------------------------------
+``src/`` is library code — imported by tests, the MCP server, and CI.
+``ui/`` is user-facing entrypoint code. Keeping them separate avoids
+"why did importing FakeLLM start a Gradio server?" surprises.
+
+LAUNCH
+------
+    python ui/app.py            # offline (fakes), no API key
+    USE_REAL=1 python ui/app.py # real OpenRouter, ≈ $0.03 / run
+"""
+
 from __future__ import annotations
 
 import sys
@@ -590,9 +611,9 @@ def render_report(report: DesignReport | dict[str, Any] | None) -> str:
 
     if report.accessibility:
         pass_text = (
-            "pass" if report.accessibility.contrast_pass is True else
-            "needs review" if report.accessibility.contrast_pass is False else
-            "not measured"
+            "pass"
+            if report.accessibility.contrast_pass is True
+            else "needs review" if report.accessibility.contrast_pass is False else "not measured"
         )
         lines.extend(["<h3>Accessibility</h3>", f"- Contrast: {pass_text}"])
 
@@ -628,8 +649,8 @@ def main() -> None:
         ) from e
 
     with gr.Blocks(title="Design Analysis Suite") as demo, gr.Column(elem_classes=["app-shell"]):
-            gr.HTML(
-                """
+        gr.HTML(
+            """
 <section class="hero-band">
   <h1>Multimodal AI Design Analysis Suite</h1>
   <p>
@@ -645,58 +666,58 @@ def main() -> None:
   </div>
 </section>
 """
-            )
+        )
 
-            gr.HTML(
-                """
+        gr.HTML(
+            """
 <div class="steps">
   <div class="step accent-teal"><b>1. Upload</b><span>Use a clear PNG or JPG. Full screens work better than tiny crops.</span></div>
   <div class="step accent-coral"><b>2. Add context</b><span>Tell the agents the audience, brand, market, or goal.</span></div>
   <div class="step accent-gold"><b>3. Review</b><span>Expect a score, strengths, recommendations, findings, and citations.</span></div>
 </div>
 """
-            )
+        )
 
-            report_state = gr.State(value=None)
+        report_state = gr.State(value=None)
 
-            with gr.Tabs():
-                with gr.Tab("Analyze"):
-                    with gr.Row():
-                        with gr.Column(scale=3, elem_classes=["upload-panel"]):
-                            gr.Markdown(
-                                """
+        with gr.Tabs():
+            with gr.Tab("Analyze"):
+                with gr.Row():
+                    with gr.Column(scale=3, elem_classes=["upload-panel"]):
+                        gr.Markdown(
+                            """
 ### Start a design review
 Upload one screen or flow image. For best results, avoid blurry exports, heavy cropping,
 or screenshots where important text is unreadable.
 """
+                        )
+                        image_in = gr.File(label="Design screenshot", file_types=["image"])
+                        instructions_in = gr.Textbox(
+                            label="Context for the agents",
+                            placeholder="Example: audience: India fintech users; brand: premium but approachable; goal: improve onboarding conversion",
+                            lines=4,
+                        )
+                        with gr.Row():
+                            use_real_in = gr.Checkbox(
+                                value=settings.use_real,
+                                label="Use real APIs",
                             )
-                            image_in = gr.File(label="Design screenshot", file_types=["image"])
-                            instructions_in = gr.Textbox(
-                                label="Context for the agents",
-                                placeholder="Example: audience: India fintech users; brand: premium but approachable; goal: improve onboarding conversion",
-                                lines=4,
-                            )
-                            with gr.Row():
-                                use_real_in = gr.Checkbox(
-                                    value=settings.use_real,
-                                    label="Use real APIs",
-                                )
-                                run_btn = gr.Button("Run analysis", variant="primary")
-                            gr.Examples(
-                                examples=[
-                                    [
-                                        "src/fakes/fixtures/sample.png",
-                                        "audience: Indian retail banking users; brand: trustworthy, modern, accessible",
-                                        False,
-                                    ]
-                                ],
-                                inputs=[image_in, instructions_in, use_real_in],
-                                label="Try the bundled sample",
-                            )
+                            run_btn = gr.Button("Run analysis", variant="primary")
+                        gr.Examples(
+                            examples=[
+                                [
+                                    "src/fakes/fixtures/sample.png",
+                                    "audience: Indian retail banking users; brand: trustworthy, modern, accessible",
+                                    False,
+                                ]
+                            ],
+                            inputs=[image_in, instructions_in, use_real_in],
+                            label="Try the bundled sample",
+                        )
 
-                        with gr.Column(scale=2):
-                            gr.HTML(
-                                """
+                    with gr.Column(scale=2):
+                        gr.HTML(
+                            """
 <div class="guide-card accent-teal">
   <h3>What to upload</h3>
   <ul>
@@ -716,28 +737,28 @@ or screenshots where important text is unreadable.
   </ul>
 </div>
 """
-                            )
-
-                    log_out = gr.HTML(
-                        _status_message(
-                            "Ready",
-                            "Upload a design screenshot and add a little context. The offline fake mode is safe for demos; real API mode uses configured keys.",
                         )
-                    )
-                    with gr.Accordion("Raw structured report", open=False):
-                        json_out = gr.JSON(label="DesignReport JSON", elem_classes=["json-holder"])
 
-                    run_btn.click(
-                        fn=on_run,
-                        inputs=[image_in, instructions_in, use_real_in],
-                        outputs=[log_out, json_out, report_state],
+                log_out = gr.HTML(
+                    _status_message(
+                        "Ready",
+                        "Upload a design screenshot and add a little context. The offline fake mode is safe for demos; real API mode uses configured keys.",
                     )
+                )
+                with gr.Accordion("Raw structured report", open=False):
+                    json_out = gr.JSON(label="DesignReport JSON", elem_classes=["json-holder"])
 
-                with gr.Tab("Report"):
-                    with gr.Row():
-                        with gr.Column(scale=1):
-                            gr.HTML(
-                                """
+                run_btn.click(
+                    fn=on_run,
+                    inputs=[image_in, instructions_in, use_real_in],
+                    outputs=[log_out, json_out, report_state],
+                )
+
+            with gr.Tab("Report"):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.HTML(
+                            """
 <div class="guide-card accent-gold">
   <h3>How to read the report</h3>
   <p>
@@ -746,43 +767,43 @@ or screenshots where important text is unreadable.
   </p>
 </div>
 """
-                            )
-                            refresh_btn = gr.Button("Refresh report")
-                        with gr.Column(scale=3):
-                            report_md = gr.Markdown(render_report(None))
-                    refresh_btn.click(fn=render_report, inputs=[report_state], outputs=[report_md])
-                    report_state.change(fn=render_report, inputs=[report_state], outputs=[report_md])
+                        )
+                        refresh_btn = gr.Button("Refresh report")
+                    with gr.Column(scale=3):
+                        report_md = gr.Markdown(render_report(None))
+                refresh_btn.click(fn=render_report, inputs=[report_state], outputs=[report_md])
+                report_state.change(fn=render_report, inputs=[report_state], outputs=[report_md])
 
-                with gr.Tab("References"):
-                    gr.HTML(
-                        """
+            with gr.Tab("References"):
+                gr.HTML(
+                    """
 <div class="guide-card accent-teal">
   <h3>Reference search</h3>
   <p>Search the design corpus for comparable patterns. In fake mode this returns deterministic sample references; real mode uses the configured retriever.</p>
 </div>
 """
+                )
+                with gr.Row():
+                    q = gr.Textbox(
+                        label="Search corpus",
+                        placeholder="e.g. fintech dashboard, onboarding card stack, accessible checkout",
+                        scale=4,
                     )
-                    with gr.Row():
-                        q = gr.Textbox(
-                            label="Search corpus",
-                            placeholder="e.g. fintech dashboard, onboarding card stack, accessible checkout",
-                            scale=4,
-                        )
-                        gallery_real = gr.Checkbox(
-                            value=settings.use_real,
-                            label="Use real retriever",
-                            scale=1,
-                        )
-                    gallery = gr.Gallery(columns=4, height=380, label="Similar references")
-                    q.submit(
-                        fn=_gallery_query_from_ui,
-                        inputs=[q, gallery_real],
-                        outputs=[gallery],
+                    gallery_real = gr.Checkbox(
+                        value=settings.use_real,
+                        label="Use real retriever",
+                        scale=1,
                     )
+                gallery = gr.Gallery(columns=4, height=380, label="Similar references")
+                q.submit(
+                    fn=_gallery_query_from_ui,
+                    inputs=[q, gallery_real],
+                    outputs=[gallery],
+                )
 
-                with gr.Tab("Settings"):
-                    gr.HTML(
-                        f"""
+            with gr.Tab("Settings"):
+                gr.HTML(
+                    f"""
 <div class="guide-card accent-gold">
   <h3>Runtime settings</h3>
   <p><b>USE_REAL</b>: {settings.use_real}</p>
@@ -790,7 +811,7 @@ or screenshots where important text is unreadable.
   <p><b>Reports directory</b>: {settings.report_dir}</p>
 </div>
 """
-                    )
+                )
 
     demo.queue().launch(
         server_name="127.0.0.1",

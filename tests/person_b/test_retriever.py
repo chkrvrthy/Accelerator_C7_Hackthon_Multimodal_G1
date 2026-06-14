@@ -3,6 +3,7 @@
 Person B replaces the body of LanceRetriever; these tests then run unchanged
 against the real implementation.
 """
+
 from __future__ import annotations
 
 import pytest

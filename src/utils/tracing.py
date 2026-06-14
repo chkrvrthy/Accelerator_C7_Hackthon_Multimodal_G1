@@ -43,6 +43,7 @@ POST-MVP
 - Add a "trace_id" column to ``data/reports/*.json`` so we can link a
   saved report back to its trace.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -139,7 +140,7 @@ def traced(name: str, **metadata: Any) -> Iterator[None]:
             project_name=settings.langchain_project,
             start_time=started,
         )
-    except Exception as e:  # noqa: BLE001 — never let tracing break the run.
+    except Exception as e:
         log.warning("trace.start failed for %s: %s", name, e)
         client = None
 
@@ -153,7 +154,7 @@ def traced(name: str, **metadata: Any) -> Iterator[None]:
                     error=f"{type(e).__name__}: {e}",
                     end_time=datetime.now(timezone.utc),
                 )
-            except Exception as ue:  # noqa: BLE001
+            except Exception as ue:
                 log.warning("trace.update (error path) failed for %s: %s", name, ue)
         raise
     else:
@@ -164,7 +165,7 @@ def traced(name: str, **metadata: Any) -> Iterator[None]:
                     outputs={"status": "ok"},
                     end_time=datetime.now(timezone.utc),
                 )
-            except Exception as ue:  # noqa: BLE001
+            except Exception as ue:
                 log.warning("trace.update (ok path) failed for %s: %s", name, ue)
     finally:
         log.debug("trace.end   name=%s", name)

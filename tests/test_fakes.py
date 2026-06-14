@@ -4,6 +4,7 @@ This file proves the fakes are useful — they emit data that validates against
 the real schemas. If you add a new agent, add a canned response to
 ``src.fakes.fake_llm._canned`` AND a test here.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -21,7 +22,14 @@ from src.schemas.outputs import (
 
 @pytest.mark.parametrize(
     "schema",
-    [VisualAnalysis, UXCritique, AccessibilityReport, MarketResearch, BrandConsistency, DesignReport],
+    [
+        VisualAnalysis,
+        UXCritique,
+        AccessibilityReport,
+        MarketResearch,
+        BrandConsistency,
+        DesignReport,
+    ],
 )
 def test_fake_llm_returns_schema_instance(schema):
     out = FakeLLM().complete(system="", user="", schema=schema)
@@ -36,7 +44,9 @@ def test_fake_vision_validates_image_exists():
 
 def test_fake_vision_raises_on_missing_image():
     with pytest.raises(FileNotFoundError):
-        FakeVisionLLM().analyze(system="", user="", images=["/no/such/path.png"], schema=VisualAnalysis)
+        FakeVisionLLM().analyze(
+            system="", user="", images=["/no/such/path.png"], schema=VisualAnalysis
+        )
 
 
 def test_fake_retriever_descending_scores():

@@ -48,6 +48,7 @@ PROMPT-ITERATION CHECKLIST
        "overall_score = 0.30*visual + 0.30*ux + 0.25*accessibility + 0.15*brand."
 3. Strengths empty → "always list 3 strengths, even if the design is rough."
 """
+
 from __future__ import annotations
 
 import json
@@ -120,7 +121,9 @@ def _cli() -> int:
     deps = build_default_deps()
     state = GraphState(image_path=str(ensure_sample_design()))
     state.visual = deps.vision.analyze(  # type: ignore[arg-type]
-        system="", user="", images=[state.image_path],
+        system="",
+        user="",
+        images=[state.image_path],
         schema=__import__("src.schemas.outputs", fromlist=["VisualAnalysis"]).VisualAnalysis,
     )
     out = run(state, deps)

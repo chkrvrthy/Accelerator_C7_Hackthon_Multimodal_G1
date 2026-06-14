@@ -52,6 +52,7 @@ DO NOT
 - Do not log full prompts at INFO; they pollute LangSmith UI. DEBUG only.
 - Do not hand-roll JSON parsing — ``schema.model_validate`` already does it.
 """
+
 from __future__ import annotations
 
 import json
@@ -124,7 +125,9 @@ class OpenRouterClient:
             messages=messages,
             schema=schema,
             model=model or self.settings.default_text_model,
-            temperature=temperature if temperature is not None else self.settings.default_temperature,
+            temperature=(
+                temperature if temperature is not None else self.settings.default_temperature
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -164,9 +167,14 @@ class OpenRouterClient:
                 # LOGIC: only retry on transient transport errors. Auth / 4xx
                 # are user-actionable and surface immediately.
                 if type(e).__name__ in _RETRYABLE_OPENAI_ERRORS and attempt < _MAX_RETRIES - 1:
-                    delay = (1.5 ** attempt) + random.random() * 0.2
-                    log.warning("openrouter: %s on attempt %d/%d, retrying in %.1fs",
-                                type(e).__name__, attempt + 1, _MAX_RETRIES, delay)
+                    delay = (1.5**attempt) + random.random() * 0.2
+                    log.warning(
+                        "openrouter: %s on attempt %d/%d, retrying in %.1fs",
+                        type(e).__name__,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        delay,
+                    )
                     time.sleep(delay)
                     continue
                 # LOGIC: providers occasionally reject the strict json_schema mode;
@@ -196,6 +204,7 @@ class OpenRouterClient:
         # LOGIC: lazy import keeps non-Person-A slices import-cheap. Other
         # owners type-check this module without needing the openai SDK.
         from openai import OpenAI
+
         self._sdk = OpenAI(
             api_key=self.settings.openrouter_api_key,
             base_url=self.settings.openrouter_base_url,
@@ -233,9 +242,9 @@ class OpenRouterClient:
         if out and out[0].get("role") == "system":
             sys_content = out[0].get("content", "") or ""
             schema_blob = json.dumps(schema.model_json_schema())
-            out[0]["content"] = (
-                f"{sys_content}\n\nReturn ONLY a JSON object that conforms to this schema:\n{schema_blob}"
-            )
+            out[0][
+                "content"
+            ] = f"{sys_content}\n\nReturn ONLY a JSON object that conforms to this schema:\n{schema_blob}"
         return out
 
     @staticmethod

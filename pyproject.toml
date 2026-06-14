@@ -32,7 +32,9 @@ extend-exclude = ["data", "notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
-ignore = ["E501"]
+# E501  line-too-long (we use black to manage formatting)
+# RUF002 ambiguous unicode in docstrings (we deliberately use × for "5x tokens")
+ignore = ["E501", "RUF002"]
 
 [tool.black]
 line-length = 100

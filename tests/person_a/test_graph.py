@@ -3,6 +3,7 @@
 This test is the smoke check Person A relies on after every commit. If this
 goes red, the demo is at risk.
 """
+
 from __future__ import annotations
 
 import pytest

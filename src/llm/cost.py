@@ -52,13 +52,15 @@ JSON, so identical text+image with different schema is a legitimate miss.
 Image inputs are hashed by *content*, not by path, so renaming files does
 not invalidate the cache.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -72,6 +74,7 @@ F = TypeVar("F", bound=Callable[..., BaseModel])
 def _cfg() -> Any:
     """Re-read ``settings`` lazily so ``tmp_settings`` monkeypatch wins in tests."""
     from src import config as _c
+
     return _c.settings
 
 
@@ -112,7 +115,13 @@ def prompt_hash(
     # HINT: when an image is passed as a path or PIL.Image, hash its bytes
     # in your caller and pass the hex digest in ``images=[bytes_sha256]``.
     # NEVER pass a Path here — it would change the key when files move.
-    payload = {"system": system, "user": user, "images": images, "schema": schema_name, "model": model}
+    payload = {
+        "system": system,
+        "user": user,
+        "images": images,
+        "schema": schema_name,
+        "model": model,
+    }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(blob).hexdigest()
 
@@ -198,6 +207,7 @@ def cached(fn: F) -> F:
         do not invalidate the cache.
       * Exceptions are NEVER cached (a transient 500 today is not 500 tomorrow).
     """
+
     @wraps(fn)
     def _wrapped(self: Any, **kwargs: Any) -> BaseModel:
         cfg = _cfg()
@@ -224,15 +234,16 @@ def cached(fn: F) -> F:
                 result = schema.model_validate(hit)
                 log.debug("cache.hit %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
                 return result
-            except Exception as e:  # noqa: BLE001 — corrupt entry, fall through.
-                log.warning("cache.hit but %s validation failed (%s); refetching",
-                            schema.__name__, e)
+            except Exception as e:
+                log.warning(
+                    "cache.hit but %s validation failed (%s); refetching", schema.__name__, e
+                )
 
         log.debug("cache.miss %s.%s key=%s", fn.__qualname__, schema.__name__, key[:8])
         result = fn(self, **kwargs)
         try:
             cache.put(key, result.model_dump())
-        except Exception as e:  # noqa: BLE001 — never let cache write break the run.
+        except Exception as e:
             log.warning("cache.put unexpected error: %s", e)
         return result
 

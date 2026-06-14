@@ -5,6 +5,7 @@ OWNER: Person A
 We bundle ONE tiny PNG so a fresh clone can run end-to-end without anyone
 copying images around. Keep this file small (<10 KB) and committed to git.
 """
+
 from __future__ import annotations
 
 import struct

@@ -1,12 +1,17 @@
-"""
-Centralized configuration.
+"""Centralized configuration.
 
-All knobs live here. Every other module should import `settings` instead
-of reading os.environ directly. This keeps things testable and swappable.
+OWNER: Person A
+SPRINT CONCEPTS: Code-Quality (typed config, single source of truth).
+CONSUMES: ``pydantic-settings``, ``python-dotenv``.
+PROVIDES: ``Settings`` dataclass, ``settings`` singleton.
 
-We use `pydantic-settings` so values are typed, validated, and documented.
-Override anything via environment variables or a local `.env` file.
+All knobs live here. Every other module should import ``settings`` instead
+of reading ``os.environ`` directly. This keeps things testable and swappable.
+
+We use ``pydantic-settings`` so values are typed, validated, and documented.
+Override anything via environment variables or a local ``.env`` file.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -14,7 +19,6 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 

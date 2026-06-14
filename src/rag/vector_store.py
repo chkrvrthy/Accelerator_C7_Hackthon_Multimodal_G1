@@ -49,6 +49,7 @@ SCHEMA REFERENCE (paste into your pyarrow schema)
     tags         list[string]   — e.g. ["dashboard", "fintech"] — used to filter
     description  string         — optional human caption, "" by default
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -62,7 +63,7 @@ if TYPE_CHECKING:  # pragma: no cover
 log = get_logger(__name__)
 
 
-def open_db() -> "lancedb.DBConnection":
+def open_db() -> lancedb.DBConnection:
     """Open or create the LanceDB at ``settings.vector_store_dir``.
 
     Idempotent — safe to call from CLI, from tests, from the UI.
@@ -85,7 +86,7 @@ def open_db() -> "lancedb.DBConnection":
 
 
 def get_or_create_table(
-    db: "lancedb.DBConnection",
+    db: lancedb.DBConnection,
     *,
     name: str | None = None,
     dim: int,
@@ -130,7 +131,14 @@ def get_or_create_table(
         ]
     )
     target = name or current_settings.vector_collection
-    if target in db.table_names():
+    # LOGIC: ``list_tables()`` is the lancedb >=0.13 spelling; the older
+    # ``table_names()`` was deprecated in 0.13 and removed in a future release.
+    # Newer versions (0.33+) return a ``ListTablesResponse`` object with a
+    # ``.tables`` attribute; older versions returned a plain list. Coerce
+    # both into a list before membership-check so we work across versions.
+    listed = db.list_tables()
+    existing = getattr(listed, "tables", listed)
+    if target in existing:
         return db.open_table(target)
     return db.create_table(target, schema=schema)
 
@@ -164,7 +172,7 @@ def upsert_records(table: Any, records: list[dict[str, Any]]) -> None:
 
 def query_by_vector(
     table: Any,
-    vector: "np.ndarray",
+    vector: np.ndarray,
     k: int = 5,
     where: str | None = None,
 ) -> list[dict[str, Any]]:

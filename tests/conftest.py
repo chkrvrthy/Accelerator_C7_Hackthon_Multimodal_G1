@@ -14,6 +14,7 @@ Every per-slice test imports the same ``fake_deps`` fixture so:
 
 If a fixture starts failing, this is the first file you read.
 """
+
 from __future__ import annotations
 
 import os
@@ -27,7 +28,6 @@ import pytest
 from src.agents.base import AgentDeps
 from src.config import Settings
 from src.fakes import FakeLLM, FakeRetriever, FakeSearch, FakeVisionLLM, ensure_sample_design
-
 
 # --------------------------------------------------------------------------- #
 # Fakes                                                                        #

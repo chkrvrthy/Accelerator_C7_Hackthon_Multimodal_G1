@@ -1,9 +1,11 @@
 """LangChain Tool wrapper returns valid JSON list of RetrievedRef dicts."""
+
 from __future__ import annotations
 
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from src.tools.rag_tool import RAGSearchInput, RAGSearchTool
 
@@ -32,7 +34,7 @@ def test_rag_tool_validates_by_argument(fake_retriever):
 
 
 def test_rag_tool_input_schema_bounds():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         RAGSearchInput(query="q", k=999)  # k upper bound is 50
 
 
