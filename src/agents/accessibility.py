@@ -55,21 +55,50 @@ from pathlib import Path
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
 from src.schemas.outputs import AccessibilityReport, GraphState
 from src.utils.logger import get_logger
-from src.utils.prompts import accessibility_system
+from src.utils.prompts import accessibility_system, accessibility_user
 
 log = get_logger(__name__)
 
 
+def _srgb_channel_to_linear(channel: float) -> float:
+    """Convert an sRGB channel in [0, 1] to linear light for WCAG contrast."""
+    if channel <= 0.03928:
+        return channel / 12.92
+    return ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _gray_to_relative_luminance(gray_value: int) -> float:
+    """Return WCAG relative luminance for a grayscale sRGB value."""
+    return _srgb_channel_to_linear(gray_value / 255.0)
+
+
+def _measure_contrast_pass(image_path: str) -> bool | None:
+    """Measure WCAG contrast from histogram peaks; None when opencv is unavailable."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
+    low_gray, high_gray = sorted(int(v) for v in np.argsort(hist)[-2:])
+    low_lum = _gray_to_relative_luminance(low_gray)
+    high_lum = _gray_to_relative_luminance(high_gray)
+    ratio = (high_lum + 0.05) / (low_lum + 0.05)
+    return bool(ratio >= 4.5)
+
+
 def run(state: GraphState, deps: AgentDeps) -> dict[str, AccessibilityReport]:
     """Run the Accessibility agent."""
-    user_text = (
-        "Audit the design for WCAG 2.2 issues. Cite success criteria numbers "
-        "(e.g. 1.4.3, 2.5.5) where applicable."
-    )
     result = run_with_schema(
         agent_name="agent.accessibility",
         system=accessibility_system(),
-        user=user_text,
+        user=accessibility_user(state),
         images=[Path(state.image_path)],
         schema=AccessibilityReport,
         deps=deps,
@@ -92,6 +121,11 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, AccessibilityReport]:
     #   bg_l, fg_l = sorted(np.argsort(hist)[-2:])  # top 2 modes
     #   ratio = (max(bg_l, fg_l) + 0.05) / (min(bg_l, fg_l) + 0.05)
     #   result.contrast_pass = ratio >= 4.5
+    measured = _measure_contrast_pass(state.image_path)
+    if measured is not None:
+        log.info("agent.accessibility: contrast_pass overridden by opencv (%s)", measured)
+        result = result.model_copy(update={"contrast_pass": measured})
+
     return {"accessibility": result}
 
 

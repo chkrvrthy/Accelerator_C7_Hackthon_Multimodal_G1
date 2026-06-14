@@ -21,3 +21,11 @@ def test_ux_findings_have_evidence(fake_deps, sample_image):
     crit = out["ux"]
     for f in crit.heuristic_violations:
         assert f.evidence and f.recommendation
+
+
+def test_ux_friction_points_have_evidence_when_present(fake_deps, sample_image):
+    state = GraphState(image_path=str(sample_image))
+    out = ux_critique.run(state, fake_deps)
+    crit = out["ux"]
+    for f in crit.friction_points:
+        assert f.evidence and f.recommendation
