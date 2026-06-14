@@ -25,7 +25,7 @@ from __future__ import annotations
 import html
 import os
 import sys
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -663,6 +663,340 @@ body {
   color: var(--teal-dark) !important;
 }
 
+.report-tag.tag-lift {
+  background: #eaf6ff;
+  border-color: rgba(37, 99, 235, 0.32);
+  color: #1d4ed8 !important;
+}
+
+.report-tag.tag-priority {
+  background: #fff;
+  border-color: rgba(15, 118, 110, 0.4);
+  color: var(--teal-dark) !important;
+  font-weight: 800 !important;
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  justify-content: center;
+  font-size: 12px !important;
+  border-radius: 50% !important;
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- premium report hero ------------------------------------------- */
+.report-hero {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 28px;
+  align-items: center;
+  background: linear-gradient(135deg, #fbfaf6 0%, #f4f8f5 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 28px 28px 26px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.report-hero .score-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 22px 18px;
+  background: #ffffff;
+  border: 1px solid #cfe1d6;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.report-hero .score-block .label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
+  margin-bottom: 4px;
+}
+
+.report-hero .score-block .value {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+.report-hero .score-block .anchor {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--green-soft);
+  border-radius: 999px;
+}
+
+.report-hero .score-meta {
+  font-size: 11.5px;
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
+  margin-top: 14px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.report-hero .rationale {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  margin: 0;
+}
+
+.report-hero .rationale-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
+  margin-bottom: 8px;
+}
+
+/* --- breakdown bars ------------------------------------------------ */
+.breakdown {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 50px;
+  align-items: center;
+  gap: 14px;
+}
+
+.breakdown-row .axis {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  text-transform: capitalize;
+}
+
+.breakdown-row .bar {
+  position: relative;
+  height: 10px;
+  background: #eef1eb;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.breakdown-row .bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--teal) 0%, #14a085 100%);
+  border-radius: 999px;
+}
+
+.breakdown-row.warn .bar-fill {
+  background: linear-gradient(90deg, #c89523 0%, #e0a93a 100%);
+}
+
+.breakdown-row.fail .bar-fill {
+  background: linear-gradient(90deg, var(--coral) 0%, #e07565 100%);
+}
+
+.breakdown-row .num {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+/* --- quick wins callout ------------------------------------------- */
+.quick-wins {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: linear-gradient(135deg, #eafaf3 0%, #def4e7 100%);
+  border: 1px solid #b9dec8;
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.quick-wins-icon {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  border: 1px solid #b9dec8;
+}
+
+.quick-wins-body {
+  flex: 1;
+}
+
+.quick-wins-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--teal-dark) !important;
+  -webkit-text-fill-color: var(--teal-dark) !important;
+  margin-bottom: 4px;
+}
+
+.quick-wins-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+/* --- ranked recommendation cards ---------------------------------- */
+.report-wrap .rec-list .priority-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.report-wrap .rec-list .meta-row {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.report-wrap .rec-list .proof {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
+  background: #f3f5ef;
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+.report-wrap .rec-list .rationale-text {
+  color: var(--soft-text) !important;
+  -webkit-text-fill-color: var(--soft-text) !important;
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 4px 0 0;
+}
+
+/* --- analyst status grid ------------------------------------------ */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-cell .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-bottom: 6px;
+}
+
+.status-cell.ok      .dot { background: #16a34a; }
+.status-cell.partial .dot { background: #d4a017; }
+.status-cell.failed  .dot { background: #c4493a; }
+.status-cell.skipped .dot { background: #94a3b8; }
+
+.status-cell .name {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+.status-cell .state {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.status-cell.ok      .state { color: #166534 !important; -webkit-text-fill-color: #166534 !important; }
+.status-cell.partial .state { color: #854d0e !important; -webkit-text-fill-color: #854d0e !important; }
+.status-cell.failed  .state { color: #842c1f !important; -webkit-text-fill-color: #842c1f !important; }
+.status-cell.skipped .state { color: #475569 !important; -webkit-text-fill-color: #475569 !important; }
+
+/* --- detail collapse for specialist sections ---------------------- */
+.report-wrap details.specialist {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fdfcf8;
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.report-wrap details.specialist summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.report-wrap details.specialist summary::-webkit-details-marker { display: none; }
+
+.report-wrap details.specialist summary::after {
+  content: "+";
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
+}
+
+.report-wrap details[open].specialist summary::after { content: "-"; }
+
+.report-wrap details.specialist .body {
+  padding: 4px 18px 16px;
+}
+
 .json-holder {
   border-radius: 8px;
   overflow: hidden;
@@ -1113,71 +1447,265 @@ def _ul(items: list[str]) -> str:
     return f"<ul>{rows}</ul>"
 
 
+def _score_anchor(score: float) -> str:
+    """Map an overall score to its rubric anchor label."""
+    if score >= 95:
+        return "World-class"
+    if score >= 80:
+        return "Production-ready"
+    if score >= 65:
+        return "Needs polish"
+    if score >= 50:
+        return "Significant rework"
+    return "Foundational issues"
+
+
+def _bar_class(value: float) -> str:
+    """Color a breakdown bar by health: ok / warn / fail."""
+    if value >= 75:
+        return ""
+    if value >= 55:
+        return "warn"
+    return "fail"
+
+
+def _status_grid(status: Mapping[str, str]) -> str:
+    """Five-cell grid showing per-agent run status."""
+    if not status:
+        return ""
+    order = ["visual", "ux", "accessibility", "brand", "market"]
+    cells: list[str] = []
+    for axis in order:
+        state = status.get(axis, "skipped")
+        cls = state if state in {"ok", "partial", "failed", "skipped"} else "skipped"
+        cells.append(
+            f'<div class="status-cell {cls}">'
+            f'<span class="dot"></span>'
+            f'<span class="name">{html.escape(axis)}</span>'
+            f'<span class="state">{html.escape(cls)}</span>'
+            "</div>"
+        )
+    return f'<div class="status-grid">{"".join(cells)}</div>'
+
+
+def _breakdown_bars(breakdown: dict[str, float], default: float = 50.0) -> str:
+    """Five horizontal bars, one per axis."""
+    order = ["visual", "ux", "accessibility", "brand", "market"]
+    rows: list[str] = []
+    for axis in order:
+        value = float(breakdown.get(axis, default))
+        cls = _bar_class(value)
+        width = max(0.0, min(100.0, value))
+        rows.append(
+            f'<div class="breakdown-row {cls}">'
+            f'<span class="axis">{html.escape(axis)}</span>'
+            f'<span class="bar"><span class="bar-fill" style="width: {width:.1f}%"></span></span>'
+            f'<span class="num">{value:.0f}</span>'
+            "</div>"
+        )
+    return f'<div class="breakdown">{"".join(rows)}</div>'
+
+
+def _quick_wins_block(report: DesignReport) -> str:
+    """Highlight high-impact, low-effort recommendations (the wins to ship first)."""
+    wins = [r for r in report.top_recommendations if r.impact == "L" and r.effort == "S"]
+    if not wins:
+        return ""
+    lines = []
+    for r in wins[:2]:
+        lift = f" — {html.escape(r.metric_lift)}" if r.metric_lift else ""
+        lines.append(f"<b>#{r.priority}.</b> {html.escape(r.title)}{lift}")
+    body = "<br>".join(lines)
+    return (
+        '<div class="quick-wins">'
+        '<span class="quick-wins-icon">!</span>'
+        '<div class="quick-wins-body">'
+        '<div class="quick-wins-title">Quick wins — ship first</div>'
+        f"<p>{body}</p>"
+        "</div></div>"
+    )
+
+
+def _recommendation_card(r: Any) -> str:
+    """Render one premium recommendation card with priority chip + meta row."""
+    e = html.escape
+    parts = [
+        '<div class="priority-row">',
+        f'<span class="report-tag tag-priority">{r.priority}</span>',
+        f"<b>{e(r.title)}</b>",
+        "</div>",
+        f'<p class="rationale-text">{e(r.rationale)}</p>',
+        '<div class="meta-row">',
+        f'<span class="report-tag tag-effort">Effort {e(str(r.effort))}</span>',
+        f'<span class="report-tag tag-impact">Impact {e(str(r.impact))}</span>',
+    ]
+    if r.metric_lift:
+        parts.append(f'<span class="report-tag tag-lift">{e(r.metric_lift)}</span>')
+    parts.append("</div>")
+    if r.proof:
+        parts.append(f'<span class="proof">Source · {e(r.proof)}</span>')
+    return "".join(parts)
+
+
 def render_report(report: DesignReport | dict[str, Any] | None) -> str:
-    """Format the latest report as a self-contained HTML block for the Report tab."""
+    """Format the latest report as a self-contained, premium HTML block.
+
+    Layout (top to bottom):
+      1. Hero: large score number + 1-paragraph score_rationale (the WHY).
+      2. Breakdown: five horizontal bars (visual, ux, accessibility, brand, market).
+      3. Per-agent run status grid (ok / partial / failed / skipped).
+      4. Quick wins callout (high-impact + low-effort only).
+      5. Top strengths (3 distinguishing items).
+      6. Ranked recommendations (priority chip, effort/impact pills,
+         metric_lift, source citation).
+      7. Collapsible specialist sections for the curious.
+    """
     if report is None:
         return """
 <div class="result-card">
   <h3>No report yet</h3>
-  <p>Run an analysis from the Analyze tab. The score, strengths, recommendations,
-  and specialist findings will appear here.</p>
+  <p>Run an analysis from the Analyze tab. The score, justification,
+  per-axis breakdown, and prioritized recommendations will appear here.</p>
 </div>
 """
-    if isinstance(report, dict):
-        report = DesignReport.model_validate(report)
+    rep: DesignReport = DesignReport.model_validate(report) if isinstance(report, dict) else report
+    report = rep
 
     e = html.escape
+    score = report.overall_score or 0.0
+    anchor = _score_anchor(score)
+
+    # --- runtime metadata --------------------------------------------- #
+    meta_parts: list[str] = []
+    if report.run_id:
+        meta_parts.append(f"run · {e(report.run_id)}")
+    if report.analyzed_at:
+        meta_parts.append(e(report.analyzed_at))
+    meta_line = " &nbsp;·&nbsp; ".join(meta_parts) if meta_parts else ""
+
+    rationale = e(
+        report.score_rationale
+        or (
+            "No rationale was returned. The synthesizer must explain the "
+            "score; re-run if this persists."
+        )
+    )
+    hero = (
+        '<div class="report-hero">'
+        '<div class="score-block">'
+        '<span class="label">Overall</span>'
+        f'<span class="value">{score:.1f}</span>'
+        f'<span class="anchor">{e(anchor)}</span>'
+        "</div>"
+        "<div>"
+        '<div class="rationale-label">Why this score</div>'
+        f'<p class="rationale">{rationale}</p>'
+        f'<div class="score-meta">{meta_line}</div>'
+        "</div></div>"
+    )
+
     parts: list[str] = [
         '<div class="report-wrap">',
         "<h2>Design report</h2>",
-        '<p class="report-subtitle">Synthesized from five specialist agents.</p>',
-        (
-            '<div class="report-score">'
-            f'<span class="report-score-value">{report.overall_score:.1f}</span>'
-            '<span class="report-score-suffix">/ 100 overall</span>'
-            "</div>"
-        ),
-        "<h3>Top strengths</h3>",
-        _ul([e(s) for s in report.top_strengths] or ["No strengths returned yet."]),
-        "<h3>Prioritized recommendations</h3>",
+        '<p class="report-subtitle">'
+        "Synthesized from five specialist agents — visual, UX, accessibility, "
+        "brand, market. Recommendations are ranked by impact-over-effort and "
+        "cite the agent finding that produced them."
+        "</p>",
+        hero,
     ]
+
+    # --- per-axis breakdown bars ------------------------------------- #
+    if report.score_breakdown or any(
+        getattr(report, k) is not None for k in ("visual", "ux", "accessibility", "brand", "market")
+    ):
+        parts.append("<h3>Per-axis breakdown</h3>")
+        parts.append(_breakdown_bars(report.score_breakdown))
+
+    # --- agent run status -------------------------------------------- #
+    if report.analysis_status:
+        parts.append("<h3>Specialist status</h3>")
+        parts.append(_status_grid(report.analysis_status))
+
+    # --- quick wins -------------------------------------------------- #
+    parts.append(_quick_wins_block(report))
+
+    # --- strengths --------------------------------------------------- #
+    parts.append("<h3>Top strengths</h3>")
+    parts.append(_ul([e(s) for s in report.top_strengths] or ["No strengths returned yet."]))
+
+    # --- prioritized recommendations -------------------------------- #
+    parts.append("<h3>Prioritized recommendations</h3>")
     if report.top_recommendations:
-        recs = [
-            f"<b>{e(r.title)}</b>"
-            f'<span class="report-tag tag-effort">Effort {e(str(r.effort))}</span>'
-            f'<span class="report-tag tag-impact">Impact {e(str(r.impact))}</span>'
-            f"<br>{e(r.rationale)}"
-            for r in report.top_recommendations
-        ]
-        rec_items = "".join(f"<li>{r}</li>" for r in recs)
-        parts.append(f'<ul class="rec-list">{rec_items}</ul>')
+        items = "".join(f"<li>{_recommendation_card(r)}</li>" for r in report.top_recommendations)
+        parts.append(f'<ul class="rec-list">{items}</ul>')
     else:
         parts.append(_ul(["No recommendations returned yet."]))
 
+    # --- collapsible specialist details ------------------------------ #
     if report.visual:
-        parts.append("<h3>Visual analysis</h3>")
-        parts.append(
-            _ul(
-                [
-                    f"Layout: {e(report.visual.layout or 'Not returned')}",
-                    f"Hierarchy: {e(report.visual.hierarchy or 'Not returned')}",
-                    f"Density score: {report.visual.density_score:.1f}/100",
-                ]
-            )
+        body = _ul(
+            [
+                f"Layout: {e(report.visual.layout or 'Not returned')}",
+                f"Hierarchy: {e(report.visual.hierarchy or 'Not returned')}",
+                f"Density score: {report.visual.density_score:.1f}/100",
+            ]
         )
-
+        parts.append(
+            f'<details class="specialist"><summary>Visual analysis</summary>'
+            f'<div class="body">{body}</div></details>'
+        )
+    if report.ux:
+        ux_items = [
+            f"Cognitive load score: {report.ux.cognitive_load_score:.1f}/100",
+            f"Heuristic violations: {len(report.ux.heuristic_violations)}",
+            f"Friction points: {len(report.ux.friction_points)}",
+        ]
+        parts.append(
+            '<details class="specialist"><summary>UX critique</summary>'
+            f'<div class="body">{_ul(ux_items)}</div></details>'
+        )
     if report.accessibility:
+        ac = report.accessibility
         pass_text = (
             "pass"
-            if report.accessibility.contrast_pass is True
-            else "needs review" if report.accessibility.contrast_pass is False else "not measured"
+            if ac.contrast_pass is True
+            else "needs review" if ac.contrast_pass is False else "not measured"
         )
-        parts.append("<h3>Accessibility</h3>")
-        parts.append(_ul([f"Contrast: {pass_text}"]))
-
+        ac_items = [
+            f"Contrast: {pass_text}",
+            f"WCAG findings: {len(ac.wcag_findings)}",
+            (
+                f"Estimated min touch target: {ac.est_min_touch_target_px}px"
+                if ac.est_min_touch_target_px is not None
+                else "Touch target: not measured"
+            ),
+        ]
+        parts.append(
+            '<details class="specialist"><summary>Accessibility</summary>'
+            f'<div class="body">{_ul(ac_items)}</div></details>'
+        )
+    if report.brand:
+        br = report.brand
+        br_items = [
+            f"Consistency score: {br.consistency_score:.1f}/100",
+            f"Color drift: {e(br.color_drift or 'not measured')}",
+            f"Type drift: {e(br.type_drift or 'not measured')}",
+            f"Component drift: {e(br.component_drift or 'not measured')}",
+        ]
+        parts.append(
+            '<details class="specialist"><summary>Brand consistency</summary>'
+            f'<div class="body">{_ul(br_items)}</div></details>'
+        )
     if report.market:
-        parts.append("<h3>Market signals</h3>")
-        parts.append(_ul([e(t) for t in report.market.trends] or ["No trends returned yet."]))
+        mk = report.market
+        mk_items = [f"Trend: {e(t)}" for t in (mk.trends or [])] or ["No trends returned."]
+        if mk.competitors:
+            mk_items.append("Competitors cited: " + ", ".join(e(c.name) for c in mk.competitors))
+        parts.append(
+            '<details class="specialist"><summary>Market signals</summary>'
+            f'<div class="body">{_ul(mk_items)}</div></details>'
+        )
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -1187,6 +1715,81 @@ def _gallery_query(deps: AgentDeps, query: str, k: int = 12) -> list[tuple[str, 
     """Return Gradio gallery tuples from the configured retriever."""
     refs = deps.retriever.retrieve_by_text(query, k=k)
     return [(_resolve_reference_path(r.image_path), f"{r.id} - {r.score:.2f}") for r in refs]
+
+
+def _references_for_report(
+    report: DesignReport | dict[str, Any] | None,
+) -> tuple[list[tuple[str, str]], str]:
+    """Build the References-tab payload from the LATEST analysis.
+
+    Replaces the old "search-only" References tab with a contextual one:
+    when the user runs an analysis, this surfaces exactly the references
+    the agents looked at — local image RAG hits the brand agent retrieved
+    plus the URLs the market agent cited. Search is still available below
+    as a supplementary tool.
+    """
+    if report is None:
+        return (
+            [],
+            """
+<div class="reference-card">
+  <h3>References used in this run</h3>
+  <p>Run an analysis from the <b>Analyze</b> tab. The references the
+  brand and market agents consulted will appear here automatically.</p>
+</div>
+""",
+        )
+
+    rep: DesignReport = DesignReport.model_validate(report) if isinstance(report, dict) else report
+    report = rep
+
+    gallery_items: list[tuple[str, str]] = []
+    if report.brand and report.brand.comparable_refs:
+        for ref in report.brand.comparable_refs:
+            try:
+                resolved = _resolve_reference_path(ref.image_path)
+            except Exception:
+                resolved = ref.image_path
+            label = f"{ref.id} · {ref.score:.2f}"
+            gallery_items.append((resolved, label))
+
+    market_lines: list[str] = []
+    if report.market and report.market.competitors:
+        for c in report.market.competitors:
+            market_lines.append(
+                f"<li><b>{html.escape(c.name)}</b> "
+                f'— <a href="{html.escape(c.url)}" target="_blank" rel="noopener">{html.escape(c.url)}</a> '
+                f'<br><span class="muted">{html.escape(c.why_relevant)}</span></li>'
+            )
+    if report.market and report.market.citations:
+        for url in report.market.citations[:5]:
+            market_lines.append(
+                f'<li><a href="{html.escape(url)}" target="_blank" rel="noopener">{html.escape(url)}</a></li>'
+            )
+
+    market_block = ""
+    if market_lines:
+        market_block = (
+            '<div class="reference-card" style="margin-top:14px">'
+            "<h3>Market references cited in this run</h3>"
+            f'<ul>{"".join(market_lines)}</ul>'
+            "</div>"
+        )
+
+    gallery_msg = (
+        f"{len(gallery_items)} brand reference(s) retrieved by the brand agent."
+        if gallery_items
+        else "Brand agent retrieved no comparable references for this screen "
+        "(empty index or off-domain). Search below to add context."
+    )
+    summary_html = (
+        '<div class="reference-card">'
+        "<h3>References used in this run</h3>"
+        f"<p>{html.escape(gallery_msg)}</p>"
+        "</div>"
+        f"{market_block}"
+    )
+    return gallery_items, summary_html
 
 
 def _reference_query_from_ui(query: str) -> tuple[list[tuple[str, str]], str]:
@@ -1356,7 +1959,34 @@ Upload a screenshot. Add context if useful.
                     """
 <div class="guide-card accent-teal">
   <h3>References</h3>
-  <p>Search returns similar indexed designs (LanceDB) plus live web examples (Tavily).</p>
+  <p>The top section shows references the agents <b>actually used</b> in
+  the latest analysis (brand RAG + market citations). Use search below to
+  add supplementary references from the local index and the live web.</p>
+</div>
+"""
+                )
+
+                run_refs_gallery = gr.Gallery(
+                    columns=4,
+                    height=320,
+                    label="Brand references retrieved by THIS run",
+                    elem_classes=["reference-gallery"],
+                )
+                run_refs_notes = gr.HTML(
+                    """
+<div class="reference-card">
+  <h3>References used in this run</h3>
+  <p>Run an analysis from the <b>Analyze</b> tab. The references the
+  brand and market agents consulted will appear here automatically.</p>
+</div>
+"""
+                )
+
+                gr.HTML(
+                    """
+<div class="guide-card accent-coral" style="margin-top:18px">
+  <h3>Search for more references</h3>
+  <p>Optional supplementary search across the local index and live web.</p>
 </div>
 """
                 )
@@ -1370,14 +2000,14 @@ Upload a screenshot. Add context if useful.
                 gallery = gr.Gallery(
                     columns=4,
                     height=380,
-                    label="Similar references",
+                    label="Search results",
                     elem_classes=["reference-gallery"],
                 )
                 reference_notes = gr.HTML(
                     """
 <div class="reference-card">
-  <h3>Similar references</h3>
-  <p>Search for local matches and live web references.</p>
+  <h3>Search results</h3>
+  <p>Type a pattern or product category and press Search.</p>
 </div>
 """
                 )
@@ -1390,6 +2020,15 @@ Upload a screenshot. Add context if useful.
                     fn=_reference_query_from_ui,
                     inputs=[q],
                     outputs=[gallery, reference_notes],
+                )
+
+                # Auto-populate the run-references section whenever a new
+                # report lands in `report_state`. This is the contextual
+                # link that ties the References tab to the current run.
+                report_state.change(
+                    fn=_references_for_report,
+                    inputs=[report_state],
+                    outputs=[run_refs_gallery, run_refs_notes],
                 )
 
             with gr.Tab("Settings"):

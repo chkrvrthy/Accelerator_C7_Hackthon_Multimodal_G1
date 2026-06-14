@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.agents.base import AgentDeps, build_default_deps, run_with_schema
@@ -67,9 +68,18 @@ log = get_logger(__name__)
 
 
 def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
-    """Combine specialist outputs into a DesignReport, persist it, return it."""
-    # LOGIC: import settings *here* (not at module top) so test monkeypatches of
-    # settings.report_dir take effect — pytest-conftest replaces it after import.
+    """Combine specialist outputs into a DesignReport, persist it, return it.
+
+    Resilience contract:
+    1. Any of the five specialist fields may be ``None`` (an agent failed).
+       The prompt instructs the LLM to renormalize weights and downgrade
+       the affected axis — we still produce a usable report.
+    2. We always populate ``run_id`` and ``analyzed_at`` on the returned
+       report so the UI can surface "this report was generated at ...".
+    3. The pydantic validator on ``top_recommendations`` re-numbers
+       priorities densely 1..N, so the UI can render in order without
+       trusting the LLM's emit sequence.
+    """
     from src import config as _cfg
 
     parts: dict[str, dict | None] = {
@@ -79,14 +89,30 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
         "brand": state.brand.model_dump() if state.brand else None,
         "market": state.market.model_dump() if state.market else None,
     }
+    failed = [k for k, v in parts.items() if v is None]
+    status_block = ""
+    if state.analysis_status:
+        status_block = f"\n<analysis_status>{json.dumps(state.analysis_status)}</analysis_status>"
+    if failed:
+        log.warning(
+            "synthesizer: %d/%d specialists missing (%s) — emitting degraded report.",
+            len(failed),
+            len(parts),
+            ", ".join(failed),
+        )
     user_text = (
         "Synthesize a DesignReport from these specialist outputs.\n"
-        f"<inputs>{json.dumps(parts, indent=2)}</inputs>\n"
-        "<task>Produce overall_score, top 3 strengths, top 3 recommendations.</task>"
+        f"<inputs>{json.dumps(parts, indent=2)}</inputs>"
+        f"{status_block}\n"
+        "<task>\n"
+        "  1. Score 0-100 with score_rationale (40-80 words explaining WHY).\n"
+        "  2. score_breakdown for each of the 5 axes.\n"
+        "  3. 3 distinguishing strengths (specific elements only).\n"
+        "  4. 3-5 ranked top_recommendations with priority 1..N, effort,\n"
+        "     impact, metric_lift, and proof citation.\n"
+        "</task>"
     )
 
-    # TODO(person-a): when the score skews, tighten the rubric in
-    # synthesize_system() (see PROMPT-ITERATION CHECKLIST above).
     report = run_with_schema(
         agent_name="agent.synthesizer",
         system=synthesizer_system(),
@@ -97,21 +123,56 @@ def run(state: GraphState, deps: AgentDeps) -> dict[str, DesignReport]:
     )
     assert isinstance(report, DesignReport)
 
+    # LOGIC: stamp runtime metadata on the LLM output. We own these fields,
+    # not the model — they are facts about the run, not about the design.
+    # The orchestrator's `state.analysis_status` is the source of truth for
+    # which agents actually ran; an LLM hallucinating "ok" everywhere is
+    # explicitly overridden here so the UI status grid never lies.
+    report.run_id = uuid.uuid4().hex[:8]
+    report.analyzed_at = datetime.now(UTC).isoformat(timespec="seconds")
+    truth_status = state.analysis_status or _infer_status(state)
+    if truth_status:
+        report.analysis_status = truth_status
+
     # LOGIC: thread the specialist outputs through into the final report so
     # the UI / MCP consumer has them all in one place. The LLM produces the
-    # *summary* fields (score, strengths, recs); we own the structured ones.
+    # *summary* fields; we own the structured ones.
     report.visual = state.visual
     report.ux = state.ux
     report.accessibility = state.accessibility
     report.brand = state.brand
     report.market = state.market
 
-    out_path = _cfg.settings.report_dir / f"design_report_{uuid.uuid4().hex[:8]}.json"
+    # LOGIC: defense in depth — the validator renumbers priorities densely
+    # but if the LLM emitted no priority at all, fix it now.
+    for i, rec in enumerate(report.top_recommendations, start=1):
+        if rec.priority < 1:
+            rec.priority = i
+
+    out_path = _cfg.settings.report_dir / f"design_report_{report.run_id}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.model_dump_json(indent=2))
-    log.info("synthesizer: wrote %s (score=%.1f)", out_path.name, report.overall_score)
+    log.info(
+        "synthesizer: wrote %s (score=%.1f, recs=%d, status=%s)",
+        out_path.name,
+        report.overall_score,
+        len(report.top_recommendations),
+        report.analysis_status,
+    )
 
     return {"report": report}
+
+
+def _infer_status(state: GraphState) -> dict[str, str]:
+    """If the orchestrator did not populate analysis_status, infer it.
+
+    Lets us produce a usable status grid even when the synthesizer is
+    called by tests / CLI directly (where the orchestrator was bypassed).
+    """
+    return {
+        name: ("ok" if getattr(state, name) is not None else "failed")
+        for name in ("visual", "ux", "accessibility", "brand", "market")
+    }
 
 
 def _cli() -> int:

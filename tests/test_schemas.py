@@ -57,7 +57,7 @@ def test_design_report_with_specialists_round_trips():
         overall_score=72.5,
         top_strengths=["x", "y", "z"],
         top_recommendations=[
-            Recommendation(title="t", rationale="r", effort="S", impact="L"),
+            Recommendation(priority=1, title="t", rationale="r", effort="S", impact="L"),
         ],
         visual=VisualAnalysis(palette=["#fff"]),
         ux=UXCritique(cognitive_load_score=50.0),

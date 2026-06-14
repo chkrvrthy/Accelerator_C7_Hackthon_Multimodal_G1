@@ -96,17 +96,114 @@ def _fallback_run(state: GraphState, deps: AgentDeps) -> DesignReport:
     """Plain-Python orchestrator used when ``langgraph`` is not installed.
 
     Walks the same DAG sequentially. Same final output shape.
+
+    RESILIENCE: each specialist is wrapped in try/except and its outcome is
+    recorded in ``state.analysis_status``. One agent crashing must NOT kill
+    the run — the user gets a partial report with a clear "X unavailable"
+    note rather than a black screen with a stack trace. The synthesizer is
+    designed to consume `None` for any specialist field.
     """
     log.info("graph: running fallback orchestrator (langgraph not installed).")
+    statuses: dict[str, str] = {}
     for name, fn in SPECIALIST_BRANCHES:
         log.info("graph: %s ...", name)
-        partial = fn(state, deps)
-        # LOGIC: copy the partial-state dict back into the GraphState.
-        state = state.model_copy(update=partial)
+        try:
+            partial = fn(state, deps)
+            state = state.model_copy(update=partial)
+            statuses[name] = "ok" if partial.get(name) is not None else "partial"
+        except Exception as e:
+            # LOGIC: log full traceback and continue. The synthesizer will
+            # see `state.<name>` as None and degrade gracefully.
+            log.error("graph: %s failed (%s) — continuing with degraded inputs.", name, e)
+            statuses[name] = "failed"
+    state = state.model_copy(update={"analysis_status": statuses})
+
     log.info("graph: synthesizer ...")
-    state = state.model_copy(update=synthesizer.run(state, deps))
-    assert state.report is not None, "synthesizer must populate report"
+    try:
+        state = state.model_copy(update=synthesizer.run(state, deps))
+    except Exception as e:
+        # LOGIC: the synthesizer itself failing should NEVER produce a
+        # blank UI. Build a minimal degraded report from whatever specialist
+        # data is available so the user sees concrete signals + an honest
+        # error explanation.
+        log.error("graph: synthesizer failed (%s) — emitting degraded report.", e)
+        state = state.model_copy(update={"report": _emergency_report(state, str(e))})
+
+    assert state.report is not None, "graph must always produce a report"
     return state.report
+
+
+def _emergency_report(state: GraphState, reason: str) -> DesignReport:
+    """Last-resort degraded report when even the synthesizer fails.
+
+    Surfaces whatever the specialists DID produce, with priority assigned by
+    a deterministic heuristic (accessibility findings first, then UX). Keeps
+    the UI useful instead of dying mid-render.
+    """
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from src.schemas.outputs import Recommendation as Rec
+
+    recs: list[Rec] = []
+    p = 1
+    if state.accessibility and state.accessibility.wcag_findings:
+        for f in state.accessibility.wcag_findings[:2]:
+            recs.append(
+                Rec(
+                    priority=p,
+                    title=f.title,
+                    rationale=(
+                        f"Accessibility WCAG {f.criterion} failure flagged "
+                        f"by the accessibility agent: {f.description}"
+                    ),
+                    effort="S",
+                    impact="L",
+                    metric_lift="Unblocks AA compliance",
+                    proof=f"accessibility:{f.criterion}",
+                )
+            )
+            p += 1
+    if state.ux and state.ux.heuristic_violations:
+        for f in state.ux.heuristic_violations[:2]:
+            recs.append(
+                Rec(
+                    priority=p,
+                    title=f.title,
+                    rationale=f"UX agent flagged: {f.description}",
+                    effort="M",
+                    impact="M",
+                    metric_lift=None,
+                    proof="ux:heuristic_violations",
+                )
+            )
+            p += 1
+    return DesignReport(
+        overall_score=50.0,
+        score_rationale=(
+            "DEGRADED REPORT — the synthesizer agent failed during this run "
+            f"({reason}). Score is a neutral 50 placeholder. Specialist "
+            "outputs that succeeded are surfaced below; treat them as raw "
+            "signals and re-run the analysis."
+        ),
+        score_breakdown={},
+        top_strengths=[
+            "Specialist outputs that ran successfully are preserved below — "
+            "this is a degraded report, not a failed run.",
+            "Re-running the analysis usually clears transient LLM errors.",
+            "Toggle USE_REAL=false in .env to validate the pipeline without "
+            "burning API credits.",
+        ],
+        top_recommendations=recs,
+        run_id=_uuid.uuid4().hex[:8],
+        analyzed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        analysis_status={**state.analysis_status, "synthesizer": "failed"},
+        visual=state.visual,
+        ux=state.ux,
+        accessibility=state.accessibility,
+        brand=state.brand,
+        market=state.market,
+    )
 
 
 def build_graph(deps: AgentDeps) -> Any:

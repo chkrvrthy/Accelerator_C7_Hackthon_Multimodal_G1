@@ -213,30 +213,109 @@ class SearchResult(BaseModel):
 
 
 class Recommendation(BaseModel):
-    """One actionable recommendation in the final report."""
+    """One actionable, ranked, evidence-backed recommendation.
 
-    title: str
-    rationale: str
+    Why every field exists:
+    - ``priority`` is the synthesizer's intent. Without it, render order
+      betrays the user (the LLM emits in *reasoning* order, not *action*
+      order). Required, unique within a report.
+    - ``metric_lift`` is what an executive reads first.
+    - ``proof`` keeps the synthesizer honest — it must cite the specialist
+      and the finding it derived from. Without proof we are guessing.
+    """
+
+    priority: int = Field(..., ge=1, description="1 is highest. Unique within a report.")
+    title: str = Field(..., description="Imperative, target value when measurable.")
+    rationale: str = Field(..., description="One sentence with WHO flagged it AND WHY.")
     effort: Literal["S", "M", "L"]
     impact: Literal["S", "M", "L"]
+    metric_lift: str | None = Field(
+        default=None,
+        description="Plain-English expected lift, e.g. '+8% sign-up conversion'.",
+    )
+    proof: str | None = Field(
+        default=None,
+        description="Citation: '<agent>:<field>'. Example: 'accessibility:1.4.3'.",
+    )
+
+
+AgentStatus = Literal["ok", "partial", "failed", "skipped"]
 
 
 class DesignReport(BaseModel):
     """The final synthesized output — one report per click of "Run".
 
-    Aggregates every specialist's typed output plus an executive layer
-    (``overall_score``, ``top_strengths``, ``top_recommendations``).
+    Adds an executive header (score + WHY + per-axis breakdown) and a
+    runtime panel (per-agent status, run_id, timestamp) on top of the
+    five specialist outputs. Designed to read like a billion-dollar
+    product report, not a debug dump.
     """
 
+    # --- executive header ---------------------------------------------- #
     overall_score: Score = Field(default=0.0)
+    score_rationale: str = Field(
+        default="",
+        description=(
+            "One paragraph (40-80 words) explaining WHY the score is what "
+            "it is. Required when overall_score>0."
+        ),
+    )
+    score_breakdown: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "Per-axis 0-100 sub-scores keyed by 'visual', 'ux', "
+            "'accessibility', 'brand', 'market'. Used by UI for breakdown bars."
+        ),
+    )
+
+    # --- prioritized actions ------------------------------------------- #
     top_strengths: list[str] = Field(default_factory=list)
     top_recommendations: list[Recommendation] = Field(default_factory=list)
 
+    # --- runtime panel ------------------------------------------------- #
+    run_id: str = Field(default="", description="Short hex id, unique per run.")
+    analyzed_at: str = Field(default="", description="ISO 8601 UTC timestamp.")
+    analysis_status: dict[str, AgentStatus] = Field(
+        default_factory=dict,
+        description=(
+            "Per-agent run status: 'ok' / 'partial' / 'failed' / 'skipped'. "
+            "Lets the UI show 'Visual unavailable' instead of crashing."
+        ),
+    )
+
+    # --- specialist payloads ------------------------------------------- #
     visual: VisualAnalysis | None = None
     ux: UXCritique | None = None
     accessibility: AccessibilityReport | None = None
     market: MarketResearch | None = None
     brand: BrandConsistency | None = None
+
+    @field_validator("top_recommendations")
+    @classmethod
+    def _sort_and_validate_priorities(cls, v: list[Recommendation]) -> list[Recommendation]:
+        # LOGIC: sort by priority ascending so the UI can render in order
+        # without ever trusting the LLM's emit sequence. Drop items with
+        # duplicate priorities silently (renumber on the fly) — render-time
+        # defensive coding, not a hard fail, so a weak LLM output still
+        # produces a usable report.
+        if not v:
+            return v
+        seen: set[int] = set()
+        unique: list[Recommendation] = []
+        for r in sorted(v, key=lambda x: x.priority):
+            if r.priority in seen:
+                continue
+            seen.add(r.priority)
+            unique.append(r)
+        # Renumber 1..N to keep the contract that priorities are dense and unique.
+        for i, r in enumerate(unique, start=1):
+            r.priority = i
+        return unique
+
+    @field_validator("score_breakdown")
+    @classmethod
+    def _clamp_breakdown(cls, v: dict[str, float]) -> dict[str, float]:
+        return {k: max(0.0, min(100.0, float(score))) for k, score in v.items()}
 
 
 # --------------------------------------------------------------------------- #
@@ -266,5 +345,9 @@ class GraphState(BaseModel):
     accessibility: AccessibilityReport | None = None
     market: MarketResearch | None = None
     brand: BrandConsistency | None = None
+
+    # Per-agent run status, populated by the orchestrator. The synthesizer
+    # reads it to know which axes to downweight in the overall score.
+    analysis_status: dict[str, AgentStatus] = Field(default_factory=dict)
 
     report: DesignReport | None = None
